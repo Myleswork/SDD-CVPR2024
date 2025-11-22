@@ -22,6 +22,10 @@ from .resnet import (
     resnet8x4_sdd,
     resnet32x4_sdd,
 )
+from .resnet import (
+    resnet32x4_afpn_sdd,
+    resnet8x4_afpn_sdd,
+)
 
 from .resnetv2 import ResNet50, ResNet18
 from .resnetv2 import ResNet50_sdd, ResNet18_sdd
@@ -33,8 +37,7 @@ from .mobilenetv2 import mobile_half, mobile_half_sdd
 from .ShuffleNetv1 import ShuffleV1, ShuffleV1_sdd
 from .ShuffleNetv2 import ShuffleV2, ShuffleV2_sdd
 
-cifar100_model_prefix = os.path.join("./save/models/"
-                                     )
+cifar100_model_prefix = os.path.join("./download_ckpts/cifar_teachers/")
 cifar_model_dict = {
     # teachers
     "resnet56": (
@@ -70,6 +73,10 @@ cifar_model_dict = {
     ),
     "resnet32x4_sdd": (
         resnet32x4_sdd,
+        cifar100_model_prefix + "resnet32x4_vanilla/ckpt_epoch_240.pth",
+    ),
+    "resnet32x4_afpn_sdd": (
+        resnet32x4_afpn_sdd,
         cifar100_model_prefix + "resnet32x4_vanilla/ckpt_epoch_240.pth",
     ),
     "ResNet50_sdd": (
@@ -119,6 +126,8 @@ cifar_model_dict = {
     "resnet44_sdd": (resnet44_sdd, None),
     "resnet8x4_sdd": (resnet8x4_sdd, None),
     "ResNet18_sdd": (ResNet18_sdd, None),
+
+    "resnet8x4_afpn_sdd": (resnet8x4_afpn_sdd, None),
 
 }
 

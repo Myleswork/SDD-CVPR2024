@@ -6,7 +6,7 @@ from PIL import Image
 
 
 def get_data_folder():
-    data_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../data")
+    data_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../dataset/cifar100")
     if not os.path.isdir(data_folder):
         os.makedirs(data_folder)
     return data_folder

@@ -6,7 +6,7 @@ from PIL import Image
 
 
 def get_data_folder():
-    data_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../data")
+    data_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset/cifar100")
     if not os.path.isdir(data_folder):
         os.makedirs(data_folder)
     return data_folder
@@ -141,11 +141,11 @@ def get_cifar100_dataloaders(batch_size, val_batch_size, num_workers):
     train_transform = get_cifar100_train_transform()
     test_transform = get_cifar100_test_transform()
     train_set = CIFAR100Instance(
-        root=data_folder, download=True, train=True, transform=train_transform
+        root=data_folder, download=False, train=True, transform=train_transform
     )
     num_data = len(train_set)
     test_set = datasets.CIFAR100(
-        root=data_folder, download=True, train=False, transform=test_transform
+        root=data_folder, download=False, train=False, transform=test_transform
     )
 
     train_loader = DataLoader(
@@ -170,7 +170,7 @@ def get_cifar100_dataloaders_sample(
 
     train_set = CIFAR100InstanceSample(
         root=data_folder,
-        download=True,
+        download=False,
         train=True,
         transform=train_transform,
         k=k,
@@ -180,7 +180,7 @@ def get_cifar100_dataloaders_sample(
     )
     num_data = len(train_set)
     test_set = datasets.CIFAR100(
-        root=data_folder, download=True, train=False, transform=test_transform
+        root=data_folder, download=False, train=False, transform=test_transform
     )
 
     train_loader = DataLoader(
