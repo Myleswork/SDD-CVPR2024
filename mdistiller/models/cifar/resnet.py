@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import torch.nn as nn
 import torch.nn.functional as F
-from mdistiller.models.cifar.utils import SPP
+from mdistiller.models.cifar.utils import SPP, DynamicDecoupling
 import torch
 from collections import OrderedDict
 
@@ -559,8 +559,28 @@ class ResNet_SDD(nn.Module):
         self.avgpool = nn.AvgPool2d(8)
         self.fc = nn.Linear(num_filters[3] * block.expansion, num_classes)
         self.stage_channels = num_filters
-        self.spp=SPP(M=M)
+        # self.spp=SPP(M=M)
         self.class_num=num_classes
+        #动态滤波器模块
+        self.avgpool = nn.AvgPool2d(8)
+        self.fc = nn.Linear(num_filters[3] * block.expansion, num_classes)
+        self.stage_channels = num_filters
+        self.class_num = num_classes
+
+        #动态滤波器实现可插拔
+        m_str = str(M).replace(" ", "") if M is not None else ""
+        if m_str.startswith('dynamic'):
+            # === 模式 A: 动态滤波器解耦 ===
+            print(f"Using Dynamic Decoupling (M={M})")
+            # 计算输入通道数: filters * expansion (BasicBlock=1, Bottleneck=4)
+            final_channels = num_filters[3] * block.expansion
+            # 默认 21 个区域 (对应 [1,2,4] 的总数)，也可以解析字符串 dynamic-10 来指定
+            self.spp = DynamicDecoupling(in_channels=final_channels, num_regions=21)
+            
+        else:
+            # === 模式 B: 原始 SDD (SPP) ===
+            print(f"Using Standard SPP (M={M})")
+            self.spp = SPP(M=M)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
