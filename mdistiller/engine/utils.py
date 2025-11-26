@@ -40,8 +40,8 @@ def validate(val_loader, distiller):
             image = image.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
             output = distiller(image=image)
-            if idx == 1:
-                print(len(output))
+            # if idx == 1:
+            #     print(len(output))
             if isinstance(output,tuple):
                 output = output[0]
             loss = criterion(output, target)
