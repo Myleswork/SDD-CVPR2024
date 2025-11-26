@@ -165,3 +165,4 @@ output/
 download_ckpts
 dataset
 *.tar.gz
+wandb/
