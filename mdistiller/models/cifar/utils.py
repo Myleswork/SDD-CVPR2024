@@ -103,4 +103,4 @@ class DynamicDecoupling(nn.Module):
         x_strength = x_feature.mean(dim=2) # [B, C]
 
         # SDD 期望的输出格式: x_feature [B, C, K], x_strength [B, C]
-        return x_feature, x_strength
+        return x_feature, x_strength, masks

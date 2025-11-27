@@ -653,7 +653,13 @@ class ResNet_SDD(nn.Module):
         x, f3_pre = self.layer3(x)  # 8x8
         f3 = x
 
-        x_spp,x_strength = self.spp(x)
+        # x_spp,x_strength = self.spp(x)
+        spp_out = self.spp(x)
+        if len(spp_out) == 3:
+            x_spp, x_strength, masks = spp_out
+        else:
+            x_spp, x_strength= spp_out
+            masks = None
 
         x_spp = x_spp.permute((2, 0, 1))
         m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
@@ -671,7 +677,7 @@ class ResNet_SDD(nn.Module):
         feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre]
         feats["pooled_feat"] = avg
 
-        return out, patch_score
+        return out, patch_score, masks, x  #新增返回原始特征图
 
 class ResNet_AFPN_SDD(nn.Module):
     """

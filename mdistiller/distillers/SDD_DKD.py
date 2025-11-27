@@ -156,9 +156,31 @@ class SDD_DKD(Distiller):
         self.M=cfg.M
 
     def forward_train(self, image, target, **kwargs):
-        logits_student, patch_s = self.student(image)
+        logits_student, patch_s, masks_student, _ = self.student(image)  #返回学生模型学到的mask
         with torch.no_grad():
-            logits_teacher, patch_t = self.teacher(image)
+            logits_teacher, _, _,  teacher_feats = self.teacher(image)
+            # f_t = teacher_feats[-1] #获取教师最后一层特征图
+            # B, C ,H, W = f_t.shape
+            B, C, H, W = teacher_feats.shape
+            K = masks_student.shape[1]  #number of decoupled region
+            f_t_flat = teacher_feats.view(B, C, H*W)  # B x C x (H*W)
+            masks_flat = masks_student.view(B, K, H*W)  # B x K x (H*W)
+
+            #聚合
+            #通过教师分类器计算logits
+            t_guided = torch.bmm(f_t_flat, masks_flat.permute(1, 2))  # B x C x K
+            t_guided = t_guided.permute(2, 0, 1).reshape(K*B, C)
+            if hasattr(self.teacherm, 'module'):
+                fc_layer = self.teacher.module.fc
+            else:
+                fc_layer = self.teacher.fc
+            t_guided_logits = fc_layer(t_guided)  # (K*B) x num_classes
+            #还原形状
+            t_guided_logits = t_guided_logits.reshape(K, B, -1).permute(1, 2, 0)  # B x num_classes x K = t
+
+            #复用教师的FC层
+            # guided_t_logits = self.teacher.module.fc(patch_t_guided)  # (K*B) x num_classes
+            # guided_t_logits = guided_t_logits.reshape(K, B, -1).permute(1, 2, 0)  # B x num_classes x K
 
         # losses
         # print(self.warmup)
@@ -176,7 +198,7 @@ class SDD_DKD(Distiller):
         else:
             loss_dkd = min(kwargs["epoch"] / self.warmup, 1.0) * multi_dkd(
                 patch_s,
-                patch_t,
+                t_guided_logits, ##修改
                 target,
                 self.alpha,
                 self.beta,

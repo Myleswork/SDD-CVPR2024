@@ -1,6 +1,6 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd,res32x4_sdd,res8x4_sdd"
+  TAG: "sdd_dkd_DN,res32x4_sdd,res8x4_sdd"
   PROJECT: "SDD"
 DISTILLER:
   TYPE: "SDD_DKD"
