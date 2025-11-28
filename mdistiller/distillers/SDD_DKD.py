@@ -74,8 +74,8 @@ def multi_dkd(out_s_multi, out_t_multi, target, alpha, beta, temperature):
     global_prediction_true_mask = global_prediction == target
     global_prediction_false_mask = global_prediction != target
 
-    global_prediction_true_mask_repeat = torch.tensor(global_prediction_true_mask).repeat(out_t_multi.shape[2])
-    global_prediction_false_mask_repeat = torch.tensor(global_prediction_false_mask).repeat(out_t_multi.shape[2])
+    global_prediction_true_mask_repeat = global_prediction_true_mask.repeat(out_t_multi.shape[2])
+    global_prediction_false_mask_repeat = global_prediction_false_mask.repeat(out_t_multi.shape[2])
 
     # global true local worng
     mask_false[global_prediction_false_mask_repeat] = False
@@ -168,9 +168,9 @@ class SDD_DKD(Distiller):
 
             #聚合
             #通过教师分类器计算logits
-            t_guided = torch.bmm(f_t_flat, masks_flat.permute(1, 2))  # B x C x K
+            t_guided = torch.bmm(f_t_flat, masks_flat.permute(0, 2, 1))  # B x C x K
             t_guided = t_guided.permute(2, 0, 1).reshape(K*B, C)
-            if hasattr(self.teacherm, 'module'):
+            if hasattr(self.teacher, 'module'):
                 fc_layer = self.teacher.module.fc
             else:
                 fc_layer = self.teacher.fc

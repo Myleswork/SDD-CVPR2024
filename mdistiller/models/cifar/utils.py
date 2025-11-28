@@ -61,9 +61,21 @@ class DynamicDecoupling(nn.Module):
         )
         
         # 初始化，让初始状态接近平均分布，避免训练初期梯度爆炸
+        # 1. 先进行常规初始化
         for m in self.mask_generator.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                
+        # 2. 【关键步骤】将最后一层卷积的权重设为 0
+        # 原理：LastConv输出为0 -> Softmax(0) -> 均匀分布(1/N) -> 等价于 Global Avg Pooling
+        last_conv = self.mask_generator[3]
+        if isinstance(last_conv, nn.Conv2d):
+            nn.init.constant_(last_conv.weight, 0)
+            if last_conv.bias is not None:
+                nn.init.constant_(last_conv.bias, 0)
+                
+        print("==> [DynamicDecoupling] Initialized with Zero-Init (Starts as Global Avg Pool)")
+        # ====================================================
 
     def forward(self, x):
         # ================== 新增检测代码 ==================
