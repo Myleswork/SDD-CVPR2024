@@ -234,8 +234,8 @@ class ResNet_SDD(nn.Module):
         patch_score = torch.reshape(patch_score, (m, b, self.class_num))
         patch_score = patch_score.permute((1, 2, 0))
 
-        x = self.avgpool(x)
-        avg = x.reshape(x.size(0), -1)
+        x_global = self.avgpool(f3)
+        avg = x_global.reshape(x_global.size(0), -1)
         out = self.fc(avg)
 
         feats = {}
