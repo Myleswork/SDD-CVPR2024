@@ -185,8 +185,8 @@ class SDD_DKD(Distiller):
                 if hasattr(self.teacher, 'module'):
                     fc_layer = self.teacher.module.fc
                 else:
-                    fc_layer = self.teacher.fc
-                    
+                    fc_layer  = self.teacher.fc
+                   
                 t_guided_logits = fc_layer(t_guided)
                 
                 # 最终目标：老师被引导后的 Logits
