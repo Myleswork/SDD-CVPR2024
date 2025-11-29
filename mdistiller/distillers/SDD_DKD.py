@@ -156,37 +156,53 @@ class SDD_DKD(Distiller):
         self.M=cfg.M
 
     def forward_train(self, image, target, **kwargs):
-        logits_student, patch_s, masks_student, _ = self.student(image)  #返回学生模型学到的mask
+        # 1. 获取学生的输出
+        logits_student, patch_s, masks_student, _ = self.student(image)
+
         with torch.no_grad():
-            logits_teacher, _, _,  teacher_feats = self.teacher(image)
-            # f_t = teacher_feats[-1] #获取教师最后一层特征图
-            # B, C ,H, W = f_t.shape
-            B, C, H, W = teacher_feats.shape
-            K = masks_student.shape[1]  #number of decoupled region
-            f_t_flat = teacher_feats.view(B, C, H*W)  # B x C x (H*W)
-            masks_flat = masks_student.view(B, K, H*W)  # B x K x (H*W)
+            # 2. 获取教师的输出
+            # 注意：Teacher 现在也返回 4 个值 (out, patch_score, masks, feat)
+            # patch_t_static 是老师原本的固定网格输出
+            logits_teacher, patch_t_static, _, teacher_feats = self.teacher(image)
 
-            #聚合
-            #通过教师分类器计算logits
-            t_guided = torch.bmm(f_t_flat, masks_flat.permute(0, 2, 1))  # B x C x K
-            t_guided = t_guided.permute(2, 0, 1).reshape(K*B, C)
-            if hasattr(self.teacher, 'module'):
-                fc_layer = self.teacher.module.fc
+            # ================== 兼容性分支逻辑 ==================
+            if masks_student is not None:
+                # === 情况 A: Dynamic Mode (创新点) ===
+                # 只有当学生能生成 Mask 时，才执行“移花接木”
+                
+                B, C, H, W = teacher_feats.shape
+                K = masks_student.shape[1]
+                
+                f_t_flat = teacher_feats.view(B, C, H*W)
+                masks_flat = masks_student.view(B, K, H*W)
+
+                # 学生引导聚合
+                t_guided = torch.bmm(f_t_flat, masks_flat.transpose(1, 2))  # [B, C, K]
+                
+                # 计算 Logits
+                t_guided = t_guided.permute(2, 0, 1).reshape(K*B, C)
+                
+                if hasattr(self.teacher, 'module'):
+                    fc_layer = self.teacher.module.fc
+                else:
+                    fc_layer = self.teacher.fc
+                    
+                t_guided_logits = fc_layer(t_guided)
+                
+                # 最终目标：老师被引导后的 Logits
+                target_patch_logits = t_guided_logits.view(K, B, -1).permute(1, 2, 0)
+                
             else:
-                fc_layer = self.teacher.fc
-            t_guided_logits = fc_layer(t_guided)  # (K*B) x num_classes
-            #还原形状
-            t_guided_logits = t_guided_logits.reshape(K, B, -1).permute(1, 2, 0)  # B x num_classes x K = t
+                # === 情况 B: Baseline Mode (原始 SDD) ===
+                # 如果没有 Mask (即 masks_student is None)，说明是标准 SPP
+                # 直接使用老师原本的静态 Patch 输出
+                target_patch_logits = patch_t_static
+            # ====================================================
 
-            #复用教师的FC层
-            # guided_t_logits = self.teacher.module.fc(patch_t_guided)  # (K*B) x num_classes
-            # guided_t_logits = guided_t_logits.reshape(K, B, -1).permute(1, 2, 0)  # B x num_classes x K
-
-        # losses
-        # print(self.warmup)
+        # 3. 计算损失
         loss_ce = self.ce_loss_weight * F.cross_entropy(logits_student, target)
 
-        if self.M=='[1]':
+        if self.M == '[1]':
             loss_dkd = min(kwargs["epoch"] / self.warmup, 1.0) * dkd_loss_origin(
                 logits_student,
                 logits_teacher,
@@ -198,12 +214,13 @@ class SDD_DKD(Distiller):
         else:
             loss_dkd = min(kwargs["epoch"] / self.warmup, 1.0) * multi_dkd(
                 patch_s,
-                t_guided_logits, ##修改
+                target_patch_logits,  # <--- 使用根据情况选择的目标 Logits
                 target,
                 self.alpha,
                 self.beta,
                 self.temperature,
             )
+            
         losses_dict = {
             "loss_ce": loss_ce,
             "loss_kd": loss_dkd,

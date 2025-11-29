@@ -40,7 +40,7 @@ class SPP(nn.Module):
         return x_feature, x_strength
 
 class DynamicDecoupling(nn.Module):
-    def __init__(self, in_channels, num_regions=21):
+    def __init__(self, in_channels, num_regions=21, image_size=8):
         """
         in_channels: 输入特征图的通道数 (例如 ResNet32x4 的最后一层)
         num_regions: 你希望解耦出多少个区域？
@@ -49,12 +49,13 @@ class DynamicDecoupling(nn.Module):
         """
         super(DynamicDecoupling, self).__init__()
         self.num_regions = num_regions
+        self.register_buffer('pe', self._build_pe(image_size))
         
         # === 动态滤波器生成器 (Generator) ===
         # 参考 4.pdf 的思想，这是一个轻量级的网络，从输入特征生成权重
         # 结构：Conv(1x1) -> BN -> ReLU -> Conv(1x1) -> Softmax/Sigmoid
         self.mask_generator = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels // 4, kernel_size=1, bias=False),
+            nn.Conv2d(in_channels+2, in_channels // 4, kernel_size=1, bias=False),
             nn.BatchNorm2d(in_channels // 4),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels // 4, num_regions, kernel_size=1, bias=False),
@@ -76,7 +77,13 @@ class DynamicDecoupling(nn.Module):
                 
         print("==> [DynamicDecoupling] Initialized with Zero-Init (Starts as Global Avg Pool)")
         # ====================================================
-
+    def _build_pe(self, size):
+        # 生成归一化的坐标网格
+        coords = torch.linspace(-1, 1, size)
+        x, y = torch.meshgrid(coords, coords)
+        pe = torch.stack([x, y], dim=0) # [2, H, W]
+        return pe.unsqueeze(0) # [1, 2, H, W]
+    
     def forward(self, x):
         # ================== 新增检测代码 ==================
         # 使用 getattr 检查是否已经打印过，防止刷屏
@@ -92,7 +99,10 @@ class DynamicDecoupling(nn.Module):
         
         # 1. 生成动态空间掩码 (Dynamic Spatial Masks)
         # masks shape: [B, K, H, W], 其中 K = num_regions
-        raw_masks = self.mask_generator(x)
+        pe = self.pe.repeat(B, 1, 1, 1).to(x.device)
+        x_with_pe = torch.cat([x, pe], dim=1) 
+        
+        raw_masks = self.mask_generator(x_with_pe) # 输入带坐标的特征
         
         # 使用 Spatial Softmax 确保每个掩码在空间上的权重之和为 1
         # 这样它的物理意义就变成了“加权平均池化” (Weighted Average Pooling)
