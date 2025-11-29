@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import math
 from mdistiller.models.cifar.utils import SPP
 import torch
+from .afpn import AFPN
 
 
 __all__ = [
@@ -24,6 +25,7 @@ model_urls = {
     "vgg16": "https://download.pytorch.org/models/vgg16-397923af.pth",
     "vgg19": "https://download.pytorch.org/models/vgg19-dcbb9e9d.pth",
 }
+
 
 
 class VGG_SDD(nn.Module):
@@ -123,7 +125,7 @@ class VGG_SDD(nn.Module):
         feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre, f4_pre]
         feats["pooled_feat"] = f5
 
-        return x, patch_score
+        return x, patch_score, None, f4
 
     @staticmethod
     def _make_layers(cfg, batch_norm=False, in_channels=3):
@@ -156,6 +158,135 @@ class VGG_SDD(nn.Module):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
 
+class VGG_AFPN_SDD(nn.Module):
+    def __init__(self, cfg, batch_norm=False, num_classes=1000, M=None):
+        super(VGG_AFPN_SDD, self).__init__()
+        # === 复用 VGG_SDD 的基础结构 ===
+        self.block0 = self._make_layers(cfg[0], batch_norm, 3)
+        self.block1 = self._make_layers(cfg[1], batch_norm, cfg[0][-1])
+        self.block2 = self._make_layers(cfg[2], batch_norm, cfg[1][-1])
+        self.block3 = self._make_layers(cfg[3], batch_norm, cfg[2][-1])
+        self.block4 = self._make_layers(cfg[4], batch_norm, cfg[3][-1])
+
+        self.pool0 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AdaptiveAvgPool2d((1, 1))
+
+        # === 1. 初始化 AFPN ===
+        # 选择 f1(block1), f2(block2), f4(block4) 作为输入
+        # 通道数对应 cfg 中的: [128, 256, 512] (以 VGG13 为例)
+        c1 = cfg[1][-1]
+        c2 = cfg[2][-1]
+        c3 = cfg[4][-1] # 这里用最后一层的通道数
+        
+        print(f"[INFO] 🚀 VGG-AFPN Initialized: Inputs=[{c1}, {c2}, {c3}]")
+        self.afpn = AFPN(in_channels=[c1, c2, c3], out_channels=c3)
+        # ====================
+
+        self.classifier = nn.Linear(512, num_classes)
+        self._initialize_weights()
+        self.stage_channels = [c[-1] for c in cfg]
+        self.spp = SPP(M=M)
+        self.class_num = num_classes
+
+    def get_feat_modules(self):
+        # 保持与 VGG_SDD 一致
+        feat_m = nn.ModuleList([])
+        feat_m.append(self.block0); feat_m.append(self.pool0)
+        feat_m.append(self.block1); feat_m.append(self.pool1)
+        feat_m.append(self.block2); feat_m.append(self.pool2)
+        feat_m.append(self.block3); feat_m.append(self.pool3)
+        feat_m.append(self.block4); feat_m.append(self.pool4)
+        return feat_m
+
+    def get_bn_before_relu(self):
+        bn1 = self.block1[-1]; bn2 = self.block2[-1]
+        bn3 = self.block3[-1]; bn4 = self.block4[-1]
+        return [bn1, bn2, bn3, bn4]
+
+    def get_stage_channels(self):
+        return self.stage_channels
+
+    def forward(self, x):
+        h = x.shape[2]
+        
+        # Block 0
+        x = F.relu(self.block0(x)); f0 = x
+        x = self.pool0(x)
+        
+        # Block 1 -> f1 (16x16)
+        x = self.block1(x); f1_pre = x
+        x = F.relu(x); f1 = x
+        x = self.pool1(x)
+        
+        # Block 2 -> f2 (8x8)
+        x = self.block2(x); f2_pre = x
+        x = F.relu(x); f2 = x
+        x = self.pool2(x)
+        
+        # Block 3 -> f3 (4x4)
+        x = self.block3(x); f3_pre = x
+        x = F.relu(x); f3 = x
+        if h == 64: x = self.pool3(x) # CIFAR 32x32 时这步不执行
+        
+        # Block 4 -> f4 (4x4)
+        x = self.block4(x); f4_pre = x
+        x = F.relu(x); f4 = x
+
+        # === 2. AFPN 特征融合 ===
+        # 将 [16x16, 8x8, 4x4] 融合为 4x4
+        feature_enhanced = self.afpn([f1, f2, f4])
+        # =======================
+
+        # === 3. SDD 尺度解耦 ===
+        # 输入 4x4 特征图到 SPP
+        x_spp, x_strength = self.spp(feature_enhanced)
+
+        x_spp = x_spp.permute((2, 0, 1))
+        m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
+        x_spp = torch.reshape(x_spp, (m * b, c))
+        patch_score = self.classifier(x_spp)
+        patch_score = torch.reshape(patch_score, (m, b, self.class_num))
+        patch_score = patch_score.permute((1, 2, 0))
+
+        # === 4. 全局分类 ===
+        # 使用增强后的特征进行全局池化
+        x_global = self.pool4(feature_enhanced)
+        x_global = x_global.reshape(x_global.size(0), -1)
+        f5 = x_global
+        out = self.classifier(x_global)
+
+        feats = {}
+        feats["feats"] = [f0, f1, f2, f3, f4]
+        feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre, f4_pre]
+        feats["pooled_feat"] = f5
+
+        # 必须返回 4 个值以兼容 SDD_DKD
+        return out, patch_score, None, feature_enhanced
+
+    # 复用静态方法
+    _make_layers = staticmethod(VGG_SDD._make_layers)
+    _initialize_weights = VGG_SDD._initialize_weights
+
+# === 注册 VGG13 AFPN 版本 ===
+def vgg8_afpn_sdd(**kwargs):
+    """VGG 8-layer model (configuration "S")
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = VGG_SDD(cfg["S"], batch_norm=True, **kwargs)
+    return model
+
+def vgg13_afpn_sdd(**kwargs):
+    """VGG 13-layer model with AFPN (configuration "B")"""
+    # cfg["B"] 对应 VGG13
+    return VGG_AFPN_SDD(cfg["B"], batch_norm=True, **kwargs)
+
+# 如果需要其他版本，依此类推
+def vgg16_afpn_sdd(**kwargs):
+    return VGG_AFPN_SDD(cfg["D"], batch_norm=True, **kwargs)
 
 cfg = {
     "A": [[64], [128], [256, 256], [512, 512], [512, 512]],

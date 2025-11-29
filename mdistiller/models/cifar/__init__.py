@@ -33,6 +33,7 @@ from .wrn import wrn_16_1, wrn_16_2, wrn_40_1, wrn_40_2
 from .wrn import wrn_16_1_sdd, wrn_16_2_sdd, wrn_40_1_sdd, wrn_40_2_sdd
 from .vgg import vgg19_bn, vgg16_bn, vgg13_bn, vgg11_bn, vgg8_bn
 from .vgg import vgg19_bn_sdd, vgg16_bn_sdd, vgg13_bn_sdd, vgg11_bn_sdd, vgg8_bn_sdd
+from .vgg import vgg8_afpn_sdd
 from .mobilenetv2 import mobile_half, mobile_half_sdd
 from .ShuffleNetv1 import ShuffleV1, ShuffleV1_sdd
 from .ShuffleNetv2 import ShuffleV2, ShuffleV2_sdd
@@ -108,6 +109,7 @@ cifar_model_dict = {
     "vgg16": (vgg16_bn, None),
     "vgg19": (vgg19_bn, None),
     "vgg8_sdd": (vgg8_bn_sdd, None),
+    "vgg8_afpn_sdd": (vgg8_afpn_sdd, None),
     "vgg11_sdd": (vgg11_bn_sdd, None),
     "vgg16_sdd": (vgg16_bn_sdd, None),
     "vgg19_sdd": (vgg19_bn_sdd, None),

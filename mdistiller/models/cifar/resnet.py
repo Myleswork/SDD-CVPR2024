@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from mdistiller.models.cifar.utils import SPP, DynamicDecoupling
 import torch
 from collections import OrderedDict
+from .afpn import AFPN
 
 
 __all__ = ["resnet"]
@@ -525,88 +526,7 @@ class ResNet(nn.Module):
 
         return out, feats
 
-# =========================================================================
-# AFPN 模块实现 (已重命名解决冲突)
-# 来源: 1、 渐进式非相邻特征融合(1区 2024).py
-# =========================================================================
-class AFPNBasicConv(nn.Module):
-    def __init__(self, filter_in, filter_out, kernel_size, stride=1, pad=None):
-        super().__init__()
-        if pad is None:
-            pad = (kernel_size - 1) // 2 if kernel_size else 0
-        self.conv = nn.Conv2d(filter_in, filter_out, kernel_size, stride, pad, bias=False)
-        self.bn = nn.BatchNorm2d(filter_out)
-        self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x):
-        return self.relu(self.bn(self.conv(x)))
-
-class AFPNBasicBlock(nn.Module):
-    def __init__(self, filter_in, filter_out):
-        super().__init__()
-        self.conv1 = nn.Conv2d(filter_in, filter_out, 3, 1, 1)
-        self.bn1 = nn.BatchNorm2d(filter_out, momentum=0.1)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(filter_out, filter_out, 3, 1, 1)
-        self.bn2 = nn.BatchNorm2d(filter_out, momentum=0.1)
-
-    def forward(self, x):
-        residual = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out += residual
-        return self.relu(out)
-
-class AFPN(nn.Module):
-    """
-    简化的 AFPN 核心模块，适配 CIFAR ResNet
-    """
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        # 1. 通道对齐 (压缩到 1/8 或其他比例)
-        self.conv0 = AFPNBasicConv(in_channels[0], in_channels[0], 1) # f1
-        self.conv1 = AFPNBasicConv(in_channels[1], in_channels[1], 1) # f2
-        self.conv2 = AFPNBasicConv(in_channels[2], in_channels[2], 1) # f3
-        
-        # 2. 融合层 (这里简化实现，使用 ASFF 思想)
-        # 将 f1(32x), f2(16x) 下采样/上采样 对齐到 f3(8x) 的尺寸
-        self.down1 = nn.Sequential(
-            nn.Conv2d(in_channels[0], in_channels[2], 4, 4, 0, bias=False), # 32->8 (4x down)
-            nn.BatchNorm2d(in_channels[2]),
-            nn.ReLU()
-        )
-        self.down2 = nn.Sequential(
-            nn.Conv2d(in_channels[1], in_channels[2], 2, 2, 0, bias=False), # 16->8 (2x down)
-            nn.BatchNorm2d(in_channels[2]),
-            nn.ReLU()
-        )
-        
-        # 3. 融合后的处理
-        self.fusion_conv = nn.Sequential(
-            AFPNBasicBlock(in_channels[2], in_channels[2]),
-            AFPNBasicConv(in_channels[2], out_channels, 1)
-        )
-
-    def forward(self, feats):
-        f1, f2, f3 = feats
-        
-        # 空间对齐：全部对齐到 f3 (8x8)
-        f1_aligned = self.down1(f1)
-        f2_aligned = self.down2(f2)
-        
-        # 加权融合 (简单相加，利用 BN 自动学习缩放)
-        fused = f1_aligned + f2_aligned + f3
-        
-        # 进一步提炼
-        out = self.fusion_conv(fused)
-        return out
-
-# =========================================================================
-# 新模型：集成 AFPN 的 ResNet
-# =========================================================================
 class ResNet_AFPN_SDD(nn.Module):
     def __init__(self, depth, num_filters, block_name="BasicBlock", num_classes=10, M=None):
         super(ResNet_AFPN_SDD, self).__init__()
