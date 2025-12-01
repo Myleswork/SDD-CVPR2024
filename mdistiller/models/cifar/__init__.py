@@ -34,8 +34,8 @@ from .wrn import wrn_16_1_sdd, wrn_16_2_sdd, wrn_40_1_sdd, wrn_40_2_sdd
 from .vgg import vgg19_bn, vgg16_bn, vgg13_bn, vgg11_bn, vgg8_bn
 from .vgg import vgg19_bn_sdd, vgg16_bn_sdd, vgg13_bn_sdd, vgg11_bn_sdd, vgg8_bn_sdd
 from .vgg import vgg8_afpn_sdd
-from .mobilenetv2 import mobile_half, mobile_half_sdd
-from .ShuffleNetv1 import ShuffleV1, ShuffleV1_sdd
+from .mobilenetv2 import mobile_half, mobile_half_sdd, mobile_half_afpn_sdd
+from .ShuffleNetv1 import ShuffleV1, ShuffleV1_sdd, ShuffleV1_afpn_sdd
 from .ShuffleNetv2 import ShuffleV2, ShuffleV2_sdd
 
 cifar100_model_prefix = os.path.join("./download_ckpts/cifar_teachers/")
@@ -115,11 +115,14 @@ cifar_model_dict = {
     "vgg19_sdd": (vgg19_bn_sdd, None),
     "MobileNetV2": (mobile_half, None),
     "MobileNetV2_sdd": (mobile_half_sdd, None),
+    "MobileNetV2_afpn_sdd": (mobile_half_afpn_sdd, None),
     "ShuffleV1": (ShuffleV1, None),
     "ShuffleV2": (ShuffleV2, None),
 
     "ShuffleV1_sdd": (ShuffleV1_sdd, None),
     "ShuffleV2_sdd": (ShuffleV2_sdd, None),
+
+    "ShuffleV1_afpn_sdd": (ShuffleV1_afpn_sdd, None),
 
     "resnet8_sdd": (resnet8_sdd, None),
     "resnet14_sdd": (resnet14_sdd, None),

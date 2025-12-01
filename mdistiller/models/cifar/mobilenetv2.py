@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from mdistiller.models.cifar.utils import SPP
+from .afpn import AFPN
 
 __all__ = ["mobilenetv2_T_w", "mobile_half"]
 
@@ -64,6 +65,129 @@ class InvertedResidual(nn.Module):
         else:
             return self.conv(x)
 
+class MobileNetV2_AFPN_SDD(nn.Module):
+    def __init__(self, T, feature_dim, input_size=32, width_mult=1.0, remove_avg=False, M=None):
+        super(MobileNetV2_AFPN_SDD, self).__init__()
+        self.remove_avg = remove_avg
+
+        # === 基础结构构建 (复用原逻辑) ===
+        self.interverted_residual_setting = [
+            [1, 16, 1, 1],
+            [T, 24, 2, 1],  # f1 (16x16)
+            [T, 32, 3, 2],  # f2 (8x8)
+            [T, 64, 4, 2],
+            [T, 96, 3, 1],  # f3 (4x4)
+            [T, 160, 3, 2],
+            [T, 320, 1, 1],
+        ]
+
+        assert input_size % 32 == 0
+        input_channel = int(32 * width_mult)
+        self.conv1 = conv_bn(3, input_channel, 2)
+
+        self.blocks = nn.ModuleList([])
+        for t, c, n, s in self.interverted_residual_setting:
+            output_channel = int(c * width_mult)
+            layers = []
+            strides = [s] + [1] * (n - 1)
+            for stride in strides:
+                layers.append(InvertedResidual(input_channel, output_channel, stride, t))
+                input_channel = output_channel
+            self.blocks.append(nn.Sequential(*layers))
+
+        self.last_channel = int(1280 * width_mult) if width_mult > 1.0 else 1280
+        
+        # === 1. AFPN 初始化 ===
+        c1 = int(24 * width_mult)
+        c2 = int(32 * width_mult)
+        c3 = int(96 * width_mult)
+        
+        print(f"[INFO] 🚀 MobileNetV2-AFPN Initialized: Inputs=[{c1}, {c2}, {c3}] -> Out={self.last_channel}")
+        self.afpn = AFPN(in_channels=[c1, c2, c3], out_channels=self.last_channel)
+        # ====================
+
+        self.classifier = nn.Sequential(nn.Linear(self.last_channel, feature_dim))
+        self.class_num = feature_dim
+        
+        # === 2. 强制使用标准 SPP ===
+        self.spp = SPP(M=M) 
+
+        H = input_size // (32 // 2)
+        self.avgpool = nn.AvgPool2d(4, ceil_mode=True)
+
+        self._initialize_weights()
+        self.stage_channels = [int(c * width_mult) for c in [32, 24, 32, 96, 320]]
+
+    # ... (保留 get_bn_before_relu, get_feat_modules, _initialize_weights 等辅助函数不变) ...
+    def get_bn_before_relu(self):
+        bn1 = self.blocks[1][-1].conv[-1]
+        bn2 = self.blocks[2][-1].conv[-1]
+        bn3 = self.blocks[4][-1].conv[-1]
+        bn4 = self.blocks[6][-1].conv[-1]
+        return [bn1, bn2, bn3, bn4]
+
+    def get_feat_modules(self):
+        feat_m = nn.ModuleList([])
+        feat_m.append(self.conv1)
+        feat_m.append(self.blocks)
+        return feat_m
+
+    def get_stage_channels(self):
+        return self.stage_channels
+        
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2.0 / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                n = m.weight.size(1)
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
+    def forward(self, x):
+        # 前向传播提取特征
+        out = self.conv1(x)
+        f0 = out
+        out = self.blocks[0](out)
+        out = self.blocks[1](out); f1 = out
+        out = self.blocks[2](out); f2 = out
+        out = self.blocks[3](out)
+        out = self.blocks[4](out); f3 = out
+        
+        # === 3. AFPN 融合 ===
+        feature_enhanced = self.afpn([f1, f2, f3])
+        
+        # === 4. 标准 SDD 流程 ===
+        # 标准 SPP 只返回 2 个值
+        x_spp, x_strength = self.spp(feature_enhanced)
+
+        x_spp = x_spp.permute((2, 0, 1))
+        m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
+        x_spp = torch.reshape(x_spp, (m * b, c))
+        patch_score = self.classifier(x_spp)
+        patch_score = torch.reshape(patch_score, (m, b, self.class_num))
+        patch_score = patch_score.permute((1, 2, 0))
+
+        # 全局分类
+        if not self.remove_avg:
+            out = self.avgpool(feature_enhanced)
+        out = out.reshape(out.size(0), -1)
+        avg = out
+        out = self.classifier(out)
+
+        # === 5. 返回值 ===
+        # 保持 4 个返回值以兼容 SDD_DKD，第三个(mask) 永远为 None
+        return out, patch_score, None, feature_enhanced
+
+# 注册函数
+def mobile_half_afpn_sdd(num_classes, M=None):
+    return MobileNetV2_AFPN_SDD(T=6, feature_dim=num_classes, width_mult=0.5, M=M)
 
 class MobileNetV2_SDD(nn.Module):
     """mobilenetV2"""
@@ -154,6 +278,8 @@ class MobileNetV2_SDD(nn.Module):
         f4 = out
         out = self.conv2(out)
 
+        feature_map = out
+
 
         x_spp,x_strength = self.spp(out)
 
@@ -177,7 +303,7 @@ class MobileNetV2_SDD(nn.Module):
         feats["feats"] = [f0, f1, f2, f3, f4]
         feats["pooled_feat"] = avg
 
-        return out, patch_score
+        return out, patch_score, None, feature_map
 
     def _initialize_weights(self):
         for m in self.modules():

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mdistiller.models.cifar.utils import SPP
+from .afpn import AFPN
 
 
 class ShuffleBlock(nn.Module):
@@ -62,6 +63,78 @@ class Bottleneck(nn.Module):
         else:
             return out
 
+class ShuffleNet_AFPN_SDD(nn.Module):
+    def __init__(self, cfg, num_classes=10, M=None):
+        super(ShuffleNet_AFPN_SDD, self).__init__()
+        out_planes = cfg["out_planes"]
+        num_blocks = cfg["num_blocks"]
+        groups = cfg["groups"]
+
+        self.conv1 = nn.Conv2d(3, 24, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(24)
+        self.in_planes = 24
+        self.layer1 = self._make_layer(out_planes[0], num_blocks[0], groups)
+        self.layer2 = self._make_layer(out_planes[1], num_blocks[1], groups)
+        self.layer3 = self._make_layer(out_planes[2], num_blocks[2], groups)
+        
+        # === 1. AFPN 初始化 ===
+        c1 = out_planes[0]
+        c2 = out_planes[1]
+        c3 = out_planes[2]
+        print(f"[INFO] 🚀 ShuffleNet-AFPN Initialized: Inputs=[{c1}, {c2}, {c3}]")
+        self.afpn = AFPN(in_channels=[c1, c2, c3], out_channels=c3)
+        # ====================
+        
+        self.avgpool = nn.AvgPool2d(kernel_size=4)
+        self.linear = nn.Linear(out_planes[2], num_classes)
+        self.class_num = num_classes
+
+        # === 2. 强制使用标准 SPP ===
+        self.spp = SPP(M=M)
+
+    def _make_layer(self, out_planes, num_blocks, groups):
+        layers = []
+        for i in range(num_blocks):
+            stride = 2 if i == 0 else 1
+            cat_planes = self.in_planes if i == 0 else 0
+            layers.append(Bottleneck(self.in_planes, out_planes - cat_planes, stride=stride, groups=groups, is_last=(i == num_blocks - 1)))
+            self.in_planes = out_planes
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        f0 = out
+        
+        out, f1_pre = self.layer1(out); f1 = out
+        out, f2_pre = self.layer2(out); f2 = out
+        out, f3_pre = self.layer3(out); f3 = out
+
+        # === 3. AFPN 融合 ===
+        feature_enhanced = self.afpn([f1, f2, f3])
+
+        # === 4. 标准 SDD ===
+        x_spp, x_strength = self.spp(feature_enhanced)
+
+        x_spp = x_spp.permute((2, 0, 1))
+        m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
+        x_spp = torch.reshape(x_spp, (m * b, c))
+        patch_score = self.linear(x_spp)
+        patch_score = torch.reshape(patch_score, (m, b, self.class_num))
+        patch_score = patch_score.permute((1, 2, 0))
+
+        # 全局
+        out = self.avgpool(feature_enhanced)
+        out = out.reshape(out.size(0), -1)
+        f4 = out
+        out = self.linear(out)
+
+        # 返回 4 个值
+        return out, patch_score, None, feature_enhanced
+
+# 注册函数
+def ShuffleV1_afpn_sdd(**kwargs):
+    cfg = {"out_planes": [240, 480, 960], "num_blocks": [4, 8, 4], "groups": 3}
+    return ShuffleNet_AFPN_SDD(cfg, **kwargs)
 
 class ShuffleNet_SDD(nn.Module):
     def __init__(self, cfg, num_classes=10, M=None):
@@ -126,6 +199,7 @@ class ShuffleNet_SDD(nn.Module):
         out, f3_pre = self.layer3(out)
         f3 = out
 
+
         x_spp, x_strength = self.spp(out)
 
         x_spp = x_spp.permute((2, 0, 1))
@@ -145,7 +219,7 @@ class ShuffleNet_SDD(nn.Module):
         feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre]
         feats["pooled_feat"] = f4
 
-        return out, patch_score
+        return out, patch_score, None, feature_enhanced
 
 
 def ShuffleV1_sdd(**kwargs):
