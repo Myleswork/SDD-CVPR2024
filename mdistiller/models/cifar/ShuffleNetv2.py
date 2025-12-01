@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mdistiller.models.cifar.utils import SPP
+from .afpn import AFPN
+
 
 
 class ShuffleBlock(nn.Module):
@@ -177,7 +179,7 @@ class ShuffleNetV2_SDD(nn.Module):
         f3 = out
         out = F.relu(self.bn2(self.conv2(out)))
 
-
+        feature_map = out
         x_spp,x_strength = self.spp(out)
 
         x_spp = x_spp.permute((2, 0, 1))
@@ -198,7 +200,7 @@ class ShuffleNetV2_SDD(nn.Module):
         feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre]
         feats["pooled_feat"] = f4
 
-        return out, patch_score
+        return out, patch_score, None, feature_map
 
 
 configs = {
@@ -214,7 +216,98 @@ def ShuffleV2_sdd(**kwargs):
     model = ShuffleNetV2_SDD(net_size=1, **kwargs)
     return model
 
+class ShuffleNetV2_AFPN_SDD(nn.Module):
+    def __init__(self, net_size, num_classes=10, M=None):
+        super(ShuffleNetV2_AFPN_SDD, self).__init__()
+        out_channels = configs[net_size]["out_channels"]
+        num_blocks = configs[net_size]["num_blocks"]
 
+        self.conv1 = nn.Conv2d(3, 24, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(24)
+        self.in_channels = 24
+        
+        self.layer1 = self._make_layer(out_channels[0], num_blocks[0])
+        self.layer2 = self._make_layer(out_channels[1], num_blocks[1])
+        self.layer3 = self._make_layer(out_channels[2], num_blocks[2])
+        
+        self.conv2 = nn.Conv2d(
+            out_channels[2],
+            out_channels[3],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
+        self.bn2 = nn.BatchNorm2d(out_channels[3])
+        
+        # === 1. AFPN 初始化 ===
+        # f1: layer1 output (Stage2)
+        # f2: layer2 output (Stage3)
+        # f3: conv2 output (Stage4 + Conv5 expansion)
+        c1 = out_channels[0]
+        c2 = out_channels[1]
+        c3 = out_channels[3] # 注意：这里使用 conv2 的输出通道 (1024)
+        
+        print(f"[INFO] 🚀 ShuffleNetV2-AFPN Initialized: Inputs=[{c1}, {c2}, {c3}] -> Out={c3}")
+        self.afpn = AFPN(in_channels=[c1, c2, c3], out_channels=c3)
+        # ====================
+
+        self.linear = nn.Linear(out_channels[3], num_classes)
+        self.class_num = num_classes
+        
+        # === 2. 强制使用标准 SPP ===
+        print(f"[INFO] 🔹 Using Standard SPP (M={M})")
+        self.spp = SPP(M=M)
+
+    def _make_layer(self, out_channels, num_blocks):
+        layers = [DownBlock(self.in_channels, out_channels)]
+        for i in range(num_blocks):
+            layers.append(BasicBlock(out_channels, is_last=(i == num_blocks - 1)))
+            self.in_channels = out_channels
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        f0 = out
+        
+        out, f1_pre = self.layer1(out); f1 = out
+        out, f2_pre = self.layer2(out); f2 = out
+        out, f3_pre = self.layer3(out)
+        
+        # Expansion
+        out = F.relu(self.bn2(self.conv2(out))); f3 = out
+
+        # === 3. AFPN 融合 ===
+        feature_enhanced = self.afpn([f1, f2, f3])
+        # ====================
+
+        # === 4. SDD ===
+        x_spp, x_strength = self.spp(feature_enhanced)
+
+        x_spp = x_spp.permute((2, 0, 1))
+        m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
+        x_spp = torch.reshape(x_spp, (m * b, c))
+        patch_score = self.linear(x_spp)
+        patch_score = torch.reshape(patch_score, (m, b, self.class_num))
+        patch_score = patch_score.permute((1, 2, 0))
+
+        # Global
+        out = F.avg_pool2d(feature_enhanced, 4)
+        out = out.reshape(out.size(0), -1)
+        f4 = out
+        out = self.linear(out)
+
+        feats = {}
+        feats["feats"] = [f0, f1, f2, f3]
+        feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre]
+        feats["pooled_feat"] = f4
+
+        # 返回 4 个值
+        return out, patch_score, None, feature_enhanced
+    
+def ShuffleV2_afpn_sdd(**kwargs):
+    # 默认使用 net_size=1
+    return ShuffleNetV2_AFPN_SDD(net_size=1, **kwargs)
 
 
 class ShuffleNetV2(nn.Module):

@@ -1,11 +1,11 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd,res32x4_sdd,shuv2_sdd"
+  TAG: "sdd_dkd_AFPN,res32x4_sdd,shuv2_sdd"
   PROJECT: "SDD"
 DISTILLER:
   TYPE: "SDD_DKD"
   TEACHER: "resnet32x4_sdd"
-  STUDENT: "ShuffleV2_sdd"
+  STUDENT: "ShuffleV2_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240
