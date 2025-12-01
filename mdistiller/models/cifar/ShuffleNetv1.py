@@ -219,7 +219,7 @@ class ShuffleNet_SDD(nn.Module):
         feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre]
         feats["pooled_feat"] = f4
 
-        return out, patch_score, None, feature_enhanced
+        return out, patch_score, None, f3
 
 
 def ShuffleV1_sdd(**kwargs):
