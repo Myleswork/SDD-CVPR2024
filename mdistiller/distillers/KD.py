@@ -134,23 +134,20 @@ class SDD_KD(Distiller):
         self.M=cfg.M
 
     def forward_train(self, image, target, **kwargs):
-        logits_student, patch_s = self.student(image)
+        # [修改] 接收 4 个返回值: (logits, patch_logits, mask, features)
+        logits_student, patch_s, _, _ = self.student(image)
         with torch.no_grad():
-            logits_teacher, patch_t = self.teacher(image)
+            logits_teacher, patch_t, _, _ = self.teacher(image)
 
         # losses
-        # *min(kwargs["epoch"] / self.warmup, 1.0)
         loss_ce = self.ce_loss_weight * F.cross_entropy(logits_student, target)
 
         if self.M == '[1]':
-            # print("M1111111111")
-            print(logits_student.shape,logits_teacher.shape)
             loss_kd =self.kd_loss_weight * kd_loss(
                 logits_student,
                 logits_teacher,
                 self.temperature,
             )
-
         else:
             loss_kd = self.kd_loss_weight * sdd_kd_loss(
                 patch_s, patch_t, self.temperature, target

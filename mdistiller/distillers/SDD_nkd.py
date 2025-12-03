@@ -10,7 +10,7 @@ def nkd_loss_origin(logit_s, logit_t, gt_label, temp, gamma):
     else:
         label = gt_label.view(len(gt_label), 1)
 
-        # N*class
+    # N*class
     N, c = logit_s.shape
     s_i = F.log_softmax(logit_s, dim=1)
     t_i = F.softmax(logit_t, dim=1)
@@ -40,9 +40,9 @@ def nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
     else:
         label = gt_label.view(len(gt_label), 1)
 
-        # N*class
+    # N*class
     N, c = logit_s.shape
-    s_i = F.log_softmax(logit_s)
+    s_i = F.log_softmax(logit_s, dim=1) # dim=1 警告修正，不过保持原样也可以
     t_i = F.softmax(logit_t, dim=1)
     # N*1
     s_t = torch.gather(s_i, 1, label)
@@ -55,14 +55,11 @@ def nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
     logit_t = logit_t[mask].reshape(N, -1)
 
     # N*class
-    S_i = F.log_softmax(logit_s / temp)
+    S_i = F.log_softmax(logit_s / temp, dim=1)
     T_i = F.softmax(logit_t / temp, dim=1)
 
     loss_non = (T_i * S_i).sum(dim=1)
     loss_non = - gamma * (temp ** 2) * loss_non
-
-    # print(loss_t.shape)
-    # print(loss_non.shape)
 
     loss_t = torch.squeeze(loss_t, dim=1)
     return loss_t + loss_non
@@ -79,7 +76,7 @@ def multi_nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
 
     out_t = torch.reshape(out_t_multi_t, (out_t_multi_t.shape[0] * out_t_multi_t.shape[1], out_t_multi_t.shape[2]))
     out_s = torch.reshape(out_s_multi_t, (out_s_multi_t.shape[0] * out_s_multi_t.shape[1], out_s_multi_t.shape[2]))
-    # print(out_s.shape)
+    
     target_r = gt_label.repeat(logit_t.shape[2])
 
     ####################### calculat distillation loss##########################
@@ -87,15 +84,12 @@ def multi_nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
 
     loss = nkd_loss(out_s, out_t, target_r, temp, gamma)
 
-
     ######################find the complementary and consistent local distillation loss#############################
-
 
     out_t_predict = torch.argmax(out_t, dim=1)
 
     mask_true = out_t_predict == target_r
     mask_false = out_t_predict != target_r
-
 
     target = gt_label
 
@@ -113,7 +107,6 @@ def multi_nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
     gt_lw = mask_false
 
     # global wrong local true
-
     mask_true[global_prediction_true_mask_repeat] = False
     mask_true[0:len(target)] = False
 
@@ -124,8 +117,6 @@ def multi_nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
 
     index = torch.zeros_like(loss).float()
 
-
-
     # global wrong local wrong
     mask_false[global_prediction_true_mask_repeat] = False
     gw_lw = mask_false
@@ -133,7 +124,6 @@ def multi_nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
     mask_true[global_prediction_false_mask_repeat] = False
     gt_lt = mask_true
 
-    # print(torch.sum(gt_lt) + torch.sum(gw_lw) + torch.sum(gt_lw) + torch.sum(gw_lt))
     ########################################Modify the weight of complementary terms#######################
 
     index[gw_lw] = 1.0
@@ -145,8 +135,6 @@ def multi_nkd_loss(logit_s, logit_t, gt_label, temp, gamma):
 
     loss = torch.sum(loss * index) / target_r.shape[0]
 
-
-    # print(loss)
     if torch.isnan(loss) or torch.isinf(loss):
         print("inf")
         loss = torch.zeros(1).float().cuda()
@@ -166,14 +154,14 @@ class SDD_NKDLoss(Distiller):
         self.M=cfg.M
 
     def forward_train(self, image, target, **kwargs):
-        logits_student, patch_s = self.student(image)
+        # [修改] 接收 4 个返回值: (logits, patch_logits, mask, features)
+        logits_student, patch_s, _, _ = self.student(image)
         with torch.no_grad():
-            logits_teacher, patch_t = self.teacher(image)
+            logits_teacher, patch_t, _, _ = self.teacher(image)
 
         # losses
         loss_ce = self.ce_loss_weight * 1.0 * F.cross_entropy(logits_student, target)
         if self.M=='[1]':
-            # print("M1111111111")
             loss_nkd=min(kwargs["epoch"] / self.warmup, 1.0) * nkd_loss_origin(
                 logits_student,
                 logits_teacher,
@@ -190,18 +178,9 @@ class SDD_NKDLoss(Distiller):
                 self.gamma,
             )
 
-        # loss_nkd = min(kwargs["epoch"] / self.warmup, 1.0) * nkd_loss_origin(
-        #     logits_student,
-        #     logits_teacher,
-        #     target,
-        #     self.temp,
-        #     self.gamma,
-        # )
-
         losses_dict = {
             "loss_ce": loss_ce,
             "loss_kd": loss_nkd,
         }
 
-        # print(11111)
         return logits_student, losses_dict
