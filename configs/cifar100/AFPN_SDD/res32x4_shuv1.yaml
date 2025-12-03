@@ -5,7 +5,7 @@ EXPERIMENT:
 DISTILLER:
   TYPE: "SDD_DKD"
   TEACHER: "resnet32x4_sdd"
-  STUDENT: "ShuffleV1_sdd"
+  STUDENT: "ShuffleV1_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240

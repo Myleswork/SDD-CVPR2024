@@ -1,11 +1,11 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "dkd,wrn_40_2,wrn_40_1"
+  TAG: "sdd_dkd_AFPN,wrn_40_2_sdd,wrn_40_1_sdd"
   PROJECT: "SDD"
 DISTILLER:
-  TYPE: "DKD"
-  TEACHER: "wrn_40_2"
-  STUDENT: "wrn_40_1"
+  TYPE: "SDD_DKD"
+  TEACHER: "wrn_40_2_sdd"
+  STUDENT: "wrn_40_1_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240

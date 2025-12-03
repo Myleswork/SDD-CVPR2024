@@ -31,6 +31,7 @@ from .resnetv2 import ResNet50, ResNet18
 from .resnetv2 import ResNet50_sdd, ResNet18_sdd
 from .wrn import wrn_16_1, wrn_16_2, wrn_40_1, wrn_40_2
 from .wrn import wrn_16_1_sdd, wrn_16_2_sdd, wrn_40_1_sdd, wrn_40_2_sdd
+from .wrn import wrn_40_1_afpn_sdd, wrn_16_2_afpn_sdd
 from .vgg import vgg19_bn, vgg16_bn, vgg13_bn, vgg11_bn, vgg8_bn
 from .vgg import vgg19_bn_sdd, vgg16_bn_sdd, vgg13_bn_sdd, vgg11_bn_sdd, vgg8_bn_sdd
 from .vgg import vgg8_afpn_sdd
@@ -104,6 +105,8 @@ cifar_model_dict = {
     "wrn_16_1_sdd": (wrn_16_1_sdd, None),
     "wrn_16_2_sdd": (wrn_16_2_sdd, None),
     "wrn_40_1_sdd": (wrn_40_1_sdd, None),
+    "wrn_16_2_afpn_sdd": (wrn_16_2_afpn_sdd, None),
+    "wrn_40_1_afpn_sdd": (wrn_40_1_afpn_sdd, None),
     "vgg8": (vgg8_bn, None),
     "vgg11": (vgg11_bn, None),
     "vgg16": (vgg16_bn, None),
