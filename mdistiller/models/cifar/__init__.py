@@ -140,7 +140,7 @@ cifar_model_dict = {
 
 }
 
-cub200_model_prefix = os.path.join("./save/cub200/")
+cub200_model_prefix = os.path.join("./download_ckpts/cub200/")
 
 cub_model_dict = {
     "vgg13_sdd": (vgg13_bn_sdd, cub200_model_prefix + "vgg13_vanilla/vgg13_best.pth"),
@@ -160,6 +160,7 @@ cub_model_dict = {
     "resnet32": (resnet32, None),
     "resnet44": (resnet44, None),
     "resnet8x4": (resnet8x4, None),
+    "resnet8x4_afpn_sdd": (resnet8x4_afpn_sdd, None),
     "ResNet18": (ResNet18, None),
     "wrn_16_1": (wrn_16_1, None),
     "wrn_16_2": (wrn_16_2, None),
@@ -168,6 +169,7 @@ cub_model_dict = {
     "wrn_16_2_sdd": (wrn_16_2_sdd, None),
     "wrn_40_1_sdd": (wrn_40_1_sdd, None),
     "vgg8": (vgg8_bn, None),
+    "vgg8_afpn_sdd": (vgg8_afpn_sdd, None),
     "vgg11": (vgg11_bn, None),
     "vgg16": (vgg16_bn, None),
     "vgg19": (vgg19_bn, None),
@@ -177,11 +179,14 @@ cub_model_dict = {
     "vgg19_sdd": (vgg19_bn_sdd, None),
     "MobileNetV2": (mobile_half, None),
     "MobileNetV2_sdd": (mobile_half_sdd, None),
+    "MobileNetV2_afpn_sdd": (mobile_half_afpn_sdd, None),
     "ShuffleV1": (ShuffleV1, None),
     "ShuffleV2": (ShuffleV2, None),
 
     "ShuffleV1_sdd": (ShuffleV1_sdd, None),
     "ShuffleV2_sdd": (ShuffleV2_sdd, None),
+    "ShuffleV1_afpn_sdd": (ShuffleV1_afpn_sdd, None),
+    "ShuffleV2_afpn_sdd": (ShuffleV2_afpn_sdd, None),
 
     "resnet8_sdd": (resnet8_sdd, None),
     "resnet14_sdd": (resnet14_sdd, None),

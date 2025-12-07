@@ -165,21 +165,34 @@ class MobileNetV2_AFPN_SDD(nn.Module):
         
         # === 4. 标准 SDD 流程 ===
         # 标准 SPP 只返回 2 个值
-        x_spp, x_strength = self.spp(feature_enhanced)
+        spp_out = self.spp(feature_enhanced)
+        if len(spp_out) == 3:
+            x_spp, x_strength, masks = spp_out
+        else:
+            x_spp, x_strength = spp_out
+        # x_spp, x_strength = self.spp(feature_enhanced)
 
         x_spp = x_spp.permute((2, 0, 1))
         m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
         x_spp = torch.reshape(x_spp, (m * b, c))
-        patch_score = self.classifier(x_spp)
+        if isinstance(self.classifier, nn.Sequential):
+            patch_score = self.classifier[-1](x_spp)
+        else:
+            patch_score = self.classifier(x_spp)
+
+        # patch_score = self.classifier(x_spp)
         patch_score = torch.reshape(patch_score, (m, b, self.class_num))
         patch_score = patch_score.permute((1, 2, 0))
 
+        x_global = torch.nn.functional.adaptive_avg_pool2d(feature_enhanced, (1, 1))
+        x_global = x_global.view(x_global.size(0), -1)
+        out = self.classifier(x_global)
         # 全局分类
-        if not self.remove_avg:
-            out = self.avgpool(feature_enhanced)
-        out = out.reshape(out.size(0), -1)
-        avg = out
-        out = self.classifier(out)
+        # if not self.remove_avg:
+        #     out = self.avgpool(feature_enhanced)
+        # out = out.reshape(out.size(0), -1)
+        # avg = out
+        # out = self.classifier(out)
 
         # === 5. 返回值 ===
         # 保持 4 个返回值以兼容 SDD_DKD，第三个(mask) 永远为 None

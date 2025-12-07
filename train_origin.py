@@ -66,6 +66,23 @@ def modify_student_model_for_cub200(model, cfg,n_cls):
         model.conv1 = conv_bn()
         model.avgpool = nn.AvgPool2d(8, ceil_mode=True)
         # print(model_s)
+    elif 'MobileNetV2_afpn_sdd' in cfg.DISTILLER.STUDENT:
+        print(f"==> [CUB200] Modifying AFPN-MobileNetV2 for {n_cls} classes")
+        # 1. 修改分类器 (classifier)
+        # MobileNetV2 的 classifier 是 Sequential，最后一层是 Linear
+        if isinstance(model.classifier, nn.Sequential):
+            in_features = model.classifier[-1].in_features
+            model.classifier[-1] = nn.Linear(in_features, n_cls)
+        else:
+            in_features = model.classifier.in_features
+            model.classifier = nn.Linear(in_features, n_cls)
+            
+        # 2. 修改 class_num (防止 SDD reshape 报错)
+        model.class_num = n_cls
+        
+        # 3. CUB200 图片较大，可能需要调整 avgpool (参考原 MobileNetV2_sdd 的做法)
+        # 如果输入是 224x224，到这里是 7x7，可以直接用全局池化
+        # model.avgpool = nn.AdaptiveAvgPool2d(1)
     else:
         raise EOFError
 

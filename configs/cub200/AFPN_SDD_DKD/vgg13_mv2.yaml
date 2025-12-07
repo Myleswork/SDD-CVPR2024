@@ -1,15 +1,14 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd_AFPN,res32x4_sdd,mv2_sdd,cub200"
-  PROJECT: "SDD"
-
+  TAG: "sdd_dkd,vgg13_sdd,mv2_sdd"
+  PROJECT: "cifar100_baselines"
 
 DATASET:
   TYPE: "cub200"
 
 DISTILLER:
   TYPE: "SDD_DKD"
-  TEACHER: "resnet32x4_sdd"
+  TEACHER: "vgg13_sdd"
   STUDENT: "MobileNetV2_sdd"
 SOLVER:
   BATCH_SIZE: 64
@@ -20,4 +19,6 @@ SOLVER:
   WEIGHT_DECAY: 0.0005
   MOMENTUM: 0.9
   TYPE: "SGD"
+DKD:
+  BETA: 6.0
 

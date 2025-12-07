@@ -1,16 +1,15 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd_AFPN,res32x4_sdd,mv2_sdd,cub200"
-  PROJECT: "SDD"
-
+  TAG: "sdd_dkd,res50_sdd,shv1_sdd"
+  PROJECT: "cifar100_baselines"
 
 DATASET:
   TYPE: "cub200"
 
 DISTILLER:
   TYPE: "SDD_DKD"
-  TEACHER: "resnet32x4_sdd"
-  STUDENT: "MobileNetV2_sdd"
+  TEACHER: "ResNet50_sdd"
+  STUDENT: "ShuffleV1_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240
