@@ -83,6 +83,16 @@ def modify_student_model_for_cub200(model, cfg,n_cls):
         # 3. CUB200 图片较大，可能需要调整 avgpool (参考原 MobileNetV2_sdd 的做法)
         # 如果输入是 224x224，到这里是 7x7，可以直接用全局池化
         # model.avgpool = nn.AdaptiveAvgPool2d(1)
+    elif 'vgg8_afpn_sdd' in cfg.DISTILLER.STUDENT:
+        if hasattr(model, 'classifier'):
+            if isinstance(model.classifier, nn.Sequential):
+                # 如果是 Sequential，修改最后一层
+                in_features = model.classifier[-1].in_features
+                model.classifier[-1] = nn.Linear(in_features, n_cls)
+            else:
+                # 如果直接是 Linear
+                in_features = model.classifier.in_features
+                model.classifier = nn.Linear(in_features, n_cls)
     else:
         raise EOFError
 
