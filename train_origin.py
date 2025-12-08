@@ -93,6 +93,14 @@ def modify_student_model_for_cub200(model, cfg,n_cls):
                 # 如果直接是 Linear
                 in_features = model.classifier.in_features
                 model.classifier = nn.Linear(in_features, n_cls)
+    elif 'Shuffle' in cfg.DISTILLER.STUDENT and 'afpn' in cfg.DISTILLER.STUDENT:
+        if hasattr(model, 'conv1'):
+            model.conv1 = nn.Conv2d(3, 24, kernel_size=7, stride=2, padding=3, bias=False)
+        if hasattr(model, 'avgpool'):
+            model.avgpool = nn.AvgPool2d(14)
+        if hasattr(model, 'fc'):
+            in_features = model.fc.in_features
+            model.fc = nn.Linear(in_features, n_cls)
     else:
         raise EOFError
 
