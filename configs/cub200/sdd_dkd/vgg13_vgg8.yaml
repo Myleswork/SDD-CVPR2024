@@ -1,7 +1,7 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd,vgg13,vgg8"
-  PROJECT: "cifar100_baselines"
+  TAG: "sdd_dkd,vgg13,vgg8,cub200"
+  PROJECT: "SDD"
 
 DATASET:
   TYPE: "cub200"

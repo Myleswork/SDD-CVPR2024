@@ -1,7 +1,7 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd,res32x4_sdd,shuv1_sdd"
-  PROJECT: "cifar100_baselines"
+  TAG: "sdd_dkd_afpn,res32x4_sdd,shuv1_sdd,cub200"
+  PROJECT: "SDD"
 
 DATASET:
   TYPE: "cub200"
@@ -9,7 +9,7 @@ DATASET:
 DISTILLER:
   TYPE: "SDD_DKD"
   TEACHER: "resnet32x4_sdd"
-  STUDENT: "ShuffleV1_sdd"
+  STUDENT: "ShuffleV1_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240

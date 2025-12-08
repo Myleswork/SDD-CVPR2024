@@ -1,7 +1,7 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd,vgg13_sdd,mv2_sdd"
-  PROJECT: "cifar100_baselines"
+  TAG: "sdd_dkd_afpn,vgg13_sdd,mv2_sdd,cub200"
+  PROJECT: "SDD"
 
 DATASET:
   TYPE: "cub200"
@@ -9,7 +9,7 @@ DATASET:
 DISTILLER:
   TYPE: "SDD_DKD"
   TEACHER: "vgg13_sdd"
-  STUDENT: "MobileNetV2_sdd"
+  STUDENT: "MobileNetV2_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240
