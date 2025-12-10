@@ -93,6 +93,7 @@ def modify_student_model_for_cub200(model, cfg,n_cls):
                 # 如果直接是 Linear
                 in_features = model.classifier.in_features
                 model.classifier = nn.Linear(in_features, n_cls)
+<<<<<<< HEAD
     elif 'ShuffleV1_afpn_sdd' in cfg.DISTILLER.STUDENT:
         print(f"==> [CUB200] Modifying ShuffleNetV1 for {n_cls} classes")
         
@@ -128,6 +129,16 @@ def modify_student_model_for_cub200(model, cfg,n_cls):
         # 修改全连接层以适配 CUB200 的类别数 (n_cls=200)
         # resnet8x4 的输出通道数是 256
         model.fc = nn.Linear(256, n_cls)
+=======
+    elif 'Shuffle' in cfg.DISTILLER.STUDENT and 'afpn' in cfg.DISTILLER.STUDENT:
+        if hasattr(model, 'conv1'):
+            model.conv1 = nn.Conv2d(3, 24, kernel_size=7, stride=2, padding=3, bias=False)
+        if hasattr(model, 'avgpool'):
+            model.avgpool = nn.AvgPool2d(14)
+        if hasattr(model, 'fc'):
+            in_features = model.fc.in_features
+            model.fc = nn.Linear(in_features, n_cls)
+>>>>>>> aef97b0a4093ef133f65379c937de303c479d387
     else:
         raise EOFError
 
