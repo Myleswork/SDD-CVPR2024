@@ -316,48 +316,42 @@ class ResNet_SDD(nn.Module):
         return [256, 512, 1024, 2048]
 
     def forward(self, x):
+        # 1. 基础特征提取
         x = self.conv1(x)
         x = self.bn1(x)
-        stem = x
         x = self.relu(x)
         x = self.maxpool(x)
 
-        feat1 = self.layer1(x)
-        feat2 = self.layer2(feat1)
-        feat3 = self.layer3(feat2)
-        feat4 = self.layer4(feat3)
-        feat4 = F.relu(feat4)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        
+        # [关键] 捕获最后一层特征图 (feature map)
+        f4 = x 
 
-        x_spp, x_strength = self.spp(feat4)
+        # 2. SDD 模块处理
+        x_spp, x_strength = self.spp(x)
 
-        # feature_num = x_spp.shape[-1]
-        # patch_score = torch.zeros(x_spp.shape[0], self.class_num, feature_num)
-        # patch_strength = torch.zeros(x_spp.shape[0], feature_num)
-
+        # 计算 Patch Logits
         x_spp = x_spp.permute((2, 0, 1))
-        m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
-        x_spp = torch.reshape(x_spp, (m * b, c))
+        K, B, C = x_spp.shape
+        x_spp = x_spp.reshape(K * B, C)
+        
         patch_score = self.fc(x_spp)
-        patch_score = torch.reshape(patch_score, (m, b, 1000))
-        patch_score = patch_score.permute((1, 2, 0))
+        patch_score = patch_score.reshape(K, B, -1).permute(1, 2, 0)
 
-        x = self.avgpool(feat4)
+        # 3. 全局分类
+        x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        avg = x
         out = self.fc(x)
 
-        feats = {}
-        feats["pooled_feat"] = avg
-        feats["feats"] = [
-            F.relu(stem),
-            F.relu(feat1),
-            F.relu(feat2),
-            F.relu(feat3),
-            F.relu(feat4),
-        ]
-        feats["preact_feats"] = [stem, feat1, feat2, feat3, feat4]
-
-        return out, patch_score
+        # 4. [修改返回值] 补齐 4 个值以适配 SDD_DKD
+        # out: 全局 Logits
+        # patch_score: 局部 Logits
+        # None: 教师没有动态 Mask
+        # f4: 教师特征图
+        return out, patch_score, None, f4
 
 
 def resnet18_sdd(pretrained=False, **kwargs):
