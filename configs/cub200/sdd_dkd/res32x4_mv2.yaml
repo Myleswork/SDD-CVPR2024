@@ -1,6 +1,6 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd_AFPN,res32x4_sdd,mv2_sdd,cub200"
+  TAG: "sdd_dkd,res32x4_sdd,mv2_sdd,cub200"
   PROJECT: "SDD"
 
 

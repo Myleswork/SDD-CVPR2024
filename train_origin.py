@@ -93,6 +93,41 @@ def modify_student_model_for_cub200(model, cfg,n_cls):
                 # 如果直接是 Linear
                 in_features = model.classifier.in_features
                 model.classifier = nn.Linear(in_features, n_cls)
+    elif 'ShuffleV1_afpn_sdd' in cfg.DISTILLER.STUDENT:
+        print(f"==> [CUB200] Modifying ShuffleNetV1 for {n_cls} classes")
+        
+        # 1. 适配输入层 (可选，针对 224x224 输入优化)
+        # 如果直接用 CIFAR 的 conv1 (k=1)，第一层输出也是 224x224，计算量巨大且显存可能爆炸
+        # 建议替换为类似 ResNet 的 7x7, stride=2
+        if hasattr(model, 'conv1'):
+            model.conv1 = nn.Conv2d(3, 24, kernel_size=7, stride=2, padding=3, bias=False)
+            
+        # 2. 修改分类器
+        if hasattr(model, 'linear'):
+            in_features = model.linear.in_features
+            model.linear = nn.Linear(in_features, n_cls)
+            
+        # 3. 调整池化层 (根据输入尺寸变化)
+        # 如果输入 224 -> conv1(s=2) -> 112 -> layer1(s=2) -> 56 -> layer2(s=2) -> 28 -> layer3(s=2) -> 14
+        # 最后的特征图是 14x14。原版 avg_pool2d(4) 是给 32x32 输入用的。
+        # 我们可以用 adaptive_avg_pool2d 替换，或者修改参数
+        if hasattr(model, 'forward'): 
+            # 注意：ShuffleNet 的 forward 函数里硬编码了 F.avg_pool2d(out, 4)
+            # 这在 Python 动态修改比较麻烦，最好去修改模型定义的源码。
+            # 如果不想改源码，可以在这里尝试 Monkey Patch (不推荐但可行)
+            pass
+    elif cfg.DISTILLER.STUDENT == 'resnet8x4_afpn_sdd':
+        # 针对 CUB200 (224x224) 修改输入层，防止特征图过大
+        model.conv1 = nn.Conv2d(3, 32, kernel_size=7, stride=2, padding=3,
+                                bias=False)
+        # CIFAR版 ResNet 只有3个Layer，224输入经过 conv1(s=2) -> 112, 
+        # layer1 -> 112, layer2(s=2) -> 56, layer3(s=2) -> 28
+        # 所以需要 AvgPool(28) 才能得到 1x1 输出
+        model.avgpool = nn.AvgPool2d(28)
+
+        # 修改全连接层以适配 CUB200 的类别数 (n_cls=200)
+        # resnet8x4 的输出通道数是 256
+        model.fc = nn.Linear(256, n_cls)
     else:
         raise EOFError
 

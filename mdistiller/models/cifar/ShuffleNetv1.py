@@ -123,7 +123,8 @@ class ShuffleNet_AFPN_SDD(nn.Module):
         patch_score = patch_score.permute((1, 2, 0))
 
         # 全局
-        out = self.avgpool(feature_enhanced)
+        # out = self.avgpool(feature_enhanced)
+        out = F.adaptive_avg_pool2d(feature_enhanced, (1, 1))
         out = out.reshape(out.size(0), -1)
         f4 = out
         out = self.linear(out)
