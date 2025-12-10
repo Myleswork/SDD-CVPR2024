@@ -1,0 +1,23 @@
+EXPERIMENT:
+  NAME: ""
+  TAG: "sdd_dkd_afpn,wrn_40_2_sdd,wrn_16_2_sdd,cub200"
+  PROJECT: "SDD"
+
+
+DATASET:
+  TYPE: "cub200"
+
+DISTILLER:
+  TYPE: "SDD_DKD"
+  TEACHER: "wrn_40_2_sdd"
+  STUDENT: "wrn_16_2_sdd"
+SOLVER:
+  BATCH_SIZE: 64
+  EPOCHS: 240
+  LR: 0.01
+  LR_DECAY_STAGES: [150, 180, 210]
+  LR_DECAY_RATE: 0.1
+  WEIGHT_DECAY: 0.0005
+  MOMENTUM: 0.9
+  TYPE: "SGD"
+
