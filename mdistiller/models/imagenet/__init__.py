@@ -1,6 +1,9 @@
 from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152,resnet18_sdd, resnet34_sdd, resnet50_sdd, resnet101_sdd, resnet152_sdd
 from .mobilenetv2 import MobileNetV2,MobileNetV2_SDD
 
+from .resnet import resnet50_afpn_sdd, resnet34_afpn_sdd, resnet18_afpn_sdd
+from .mobilenetv2 import mobilenetv2_afpn_sdd
+
 
 imagenet_model_dict = {
     "ResNet18": resnet18,
@@ -14,4 +17,9 @@ imagenet_model_dict = {
     "ResNet50_sdd": resnet50_sdd,
     "ResNet101_sdd": resnet101_sdd,
     "MobileNetV2_sdd": MobileNetV2_SDD,
+
+    "ResNet18_afpn_sdd": resnet18_afpn_sdd,
+    "ResNet34_afpn_sdd": resnet34_afpn_sdd,
+    "ResNet50_afpn_sdd": resnet50_afpn_sdd,
+    "MobileNetV2_afpn_sdd": mobilenetv2_afpn_sdd,
 }

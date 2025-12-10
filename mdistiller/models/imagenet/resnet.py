@@ -4,6 +4,7 @@ import math
 import torch.utils.model_zoo as model_zoo
 import torch.nn.functional as F
 from mdistiller.models.imagenet.utils import SPP
+from .afpn import AFPN
 
 __all__ = ["ResNet", "resnet18", "resnet34", "resnet50", "resnet101", "resnet152"]
 
@@ -412,3 +413,78 @@ def resnet152_sdd(pretrained=False, **kwargs):
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls["resnet152"]))
     return model
+
+class ResNet_AFPN_SDD(ResNet):
+    """
+    ImageNet ResNet with AFPN integration (No Dynamic Decoupling)
+    """
+    def __init__(self, block, layers, M=None, num_classes=1000, **kwargs):
+        # 1. 初始化父类
+        super(ResNet_AFPN_SDD, self).__init__(block, layers, num_classes=num_classes, **kwargs)
+        
+        # 2. 计算通道数
+        expansion = block.expansion
+        c1, c2, c3, c4 = [64*expansion, 128*expansion, 256*expansion, 512*expansion]
+        
+        # 3. 初始化 AFPN
+        self.afpn_out_dim = c4
+        self.afpn = AFPN(in_channels=[c1, c2, c3, c4], out_channels=self.afpn_out_dim)
+        print(f"[INFO] 🚀 AFPN Initialized: Inputs=[{c1}, {c2}, {c3}, {c4}] -> Out={self.afpn_out_dim}")
+
+        # 4. 重置分类器 (适配 AFPN 输出)
+        self.fc = nn.Linear(self.afpn_out_dim, num_classes)
+        self.class_num = num_classes
+        
+        # 5. 初始化标准 SPP (移除动态判断)
+        self.spp = SPP(M=M)
+
+    def forward(self, x):
+        # 提取基础特征
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        # 提取 4 个阶段特征
+        x1 = self.layer1(x)
+        x2 = self.layer2(x1)
+        x3 = self.layer3(x2)
+        x4 = self.layer4(x3)
+
+        # === AFPN 融合 ===
+        # feature_enhanced: [B, C, 7, 7]
+        feature_enhanced = self.afpn([x1, x2, x3, x4])
+
+        # === 标准 SDD 处理 ===
+        # 标准 SPP 只返回 2 个值
+        x_spp, x_strength = self.spp(feature_enhanced)
+
+        # 计算 Patch Logits
+        x_spp = x_spp.permute((2, 0, 1))
+        K, B, C = x_spp.shape
+        x_spp = x_spp.reshape(K * B, C)
+        
+        patch_score = self.fc(x_spp)
+        patch_score = patch_score.reshape(K, B, -1).permute(1, 2, 0)
+
+        # === 全局分类 ===
+        # 使用自适应池化防止尺寸问题
+        x_global = F.adaptive_avg_pool2d(feature_enhanced, (1, 1))
+        x_global = x_global.view(x_global.size(0), -1)
+        out = self.fc(x_global)
+
+        # 返回 4 个值 (Mask 始终为 None)
+        return out, patch_score, None, feature_enhanced
+
+# 注册函数
+def resnet18_afpn_sdd(pretrained=False, **kwargs):
+    return ResNet_AFPN_SDD(BasicBlock, [2, 2, 2, 2], **kwargs)
+
+def resnet34_afpn_sdd(pretrained=False, **kwargs):
+    return ResNet_AFPN_SDD(BasicBlock, [3, 4, 6, 3], **kwargs)
+
+def resnet50_afpn_sdd(pretrained=False, **kwargs):
+    return ResNet_AFPN_SDD(Bottleneck, [3, 4, 6, 3], **kwargs)
+
+def resnet101_afpn_sdd(pretrained=False, **kwargs):
+    return ResNet_AFPN_SDD(Bottleneck, [3, 4, 23, 3], **kwargs)
