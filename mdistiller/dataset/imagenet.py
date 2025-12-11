@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 
 # data_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../data/imagenet')
 
-data_folder = "./data/imagenet"
+data_folder = "./data/imagenet2012/imagenet2012"
 
 
 class ImageNet(ImageFolder):
