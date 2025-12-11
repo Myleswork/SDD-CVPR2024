@@ -167,5 +167,4 @@ dataset
 *.tar.gz
 wandb/
 
-mdistiller/dataset
-mdistiller/dataset/imagenet.py
+mdistiller/dataset/
