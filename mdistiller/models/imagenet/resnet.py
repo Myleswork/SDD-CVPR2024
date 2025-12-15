@@ -250,11 +250,13 @@ def resnet152(pretrained=False, **kwargs):
 
 
 
+# 确保头部引入了 SPP
+from mdistiller.models.imagenet.utils import SPP
+
 class ResNet_SDD(nn.Module):
-    def __init__(self, block, layers, num_classes=1000,M=None):
-        self.inplanes = 64
-        self.M=M
+    def __init__(self, block, layers, M=None, num_classes=1000):
         super(ResNet_SDD, self).__init__()
+        self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -263,32 +265,31 @@ class ResNet_SDD(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
+        
+        # [修改] 全局池化改为自适应，防止尺寸不匹配
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        
+        # SDD 模块
+        self.spp = SPP(M=M)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-        self.spp = SPP(M=self.M)
+        self.class_num = num_classes
 
+        # 初始化权重...
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2.0 / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1):
+        # ... (保持原样) ...
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(
-                    self.inplanes,
-                    planes * block.expansion,
-                    kernel_size=1,
-                    stride=stride,
-                    bias=False,
-                    ),
+                nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
-
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
         self.inplanes = planes * block.expansion
@@ -296,27 +297,7 @@ class ResNet_SDD(nn.Module):
             layers.append(block(self.inplanes, planes))
         return nn.Sequential(*layers)
 
-    def get_bn_before_relu(self):
-        if isinstance(self.layer1[0], Bottleneck):
-            # bn1 = self.layer1[-1].bn3
-            bn2 = self.layer2[-1].bn3
-            bn3 = self.layer3[-1].bn3
-            bn4 = self.layer4[-1].bn3
-        elif isinstance(self.layer1[0], BasicBlock):
-            # bn1 = self.layer1[-1].bn2
-            bn2 = self.layer2[-1].bn2
-            bn3 = self.layer3[-1].bn2
-            bn4 = self.layer4[-1].bn2
-        else:
-            print("ResNet unknown block error !!!")
-
-        return [bn2, bn3, bn4]
-
-    def get_stage_channels(self):
-        return [256, 512, 1024, 2048]
-
     def forward(self, x):
-        # 1. 基础特征提取
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -325,33 +306,30 @@ class ResNet_SDD(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        x = self.layer4(x)
-        
-        # [关键] 捕获最后一层特征图 (feature map)
-        f4 = x 
+        feat = self.layer4(x) # [B, C, 7, 7]
 
-        # 2. SDD 模块处理
-        x_spp, x_strength = self.spp(x)
+        # [新增] SDD 局部特征计算
+        spp_out = self.spp(feat)
+        if len(spp_out) == 3:
+            x_spp, x_strength, masks = spp_out
+        else:
+            x_spp, x_strength = spp_out
+            masks = None # 静态 SDD 没有 mask
 
         # 计算 Patch Logits
         x_spp = x_spp.permute((2, 0, 1))
         K, B, C = x_spp.shape
         x_spp = x_spp.reshape(K * B, C)
-        
         patch_score = self.fc(x_spp)
         patch_score = patch_score.reshape(K, B, -1).permute(1, 2, 0)
 
-        # 3. 全局分类
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        out = self.fc(x)
+        # 全局 Logits
+        x_global = self.avgpool(feat)
+        x_global = x_global.view(x_global.size(0), -1)
+        out = self.fc(x_global)
 
-        # 4. [修改返回值] 补齐 4 个值以适配 SDD_DKD
-        # out: 全局 Logits
-        # patch_score: 局部 Logits
-        # None: 教师没有动态 Mask
-        # f4: 教师特征图
-        return out, patch_score, None, f4
+        # [关键] 返回 4 个值
+        return out, patch_score, masks, feat
 
 
 def resnet18_sdd(pretrained=False, **kwargs):
