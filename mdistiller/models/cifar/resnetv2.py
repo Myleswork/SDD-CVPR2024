@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mdistiller.models.cifar.utils import SPP
+from .afpn import AFPN
 
 
 class BasicBlock(nn.Module):
@@ -88,126 +89,92 @@ class Bottleneck(nn.Module):
 
 
 class ResNet_SDD(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, zero_init_residual=False,M=None):
+    def __init__(self, block, num_blocks, M=None, num_classes=100, use_afpn=False):
         super(ResNet_SDD, self).__init__()
         self.in_planes = 64
+        self.M = M
+        self.use_afpn = use_afpn
+        self.class_num = num_classes
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
+        
+        # 4个层级
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.linear = nn.Linear(512 * block.expansion, num_classes)
-
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
-        # Zero-initialize the last BN in each residual branch,
-        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
-        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
-        if zero_init_residual:
-            for m in self.modules():
-                if isinstance(m, Bottleneck):
-                    nn.init.constant_(m.bn3.weight, 0)
-                elif isinstance(m, BasicBlock):
-                    nn.init.constant_(m.bn2.weight, 0)
-        self.stage_channels = [256, 512, 1024, 2048]
+        
+        # SDD 模块
         self.spp = SPP(M=M)
-        self.class_num = num_classes
+        
+        # 分类器 (注意：这里必须叫 self.linear 以匹配 ResNet 的权重命名)
+        feat_dim = 512 * block.expansion
+        self.linear = nn.Linear(feat_dim, num_classes)
 
-    def get_feat_modules(self):
-        feat_m = nn.ModuleList([])
-        feat_m.append(self.conv1)
-        feat_m.append(self.bn1)
-        feat_m.append(self.layer1)
-        feat_m.append(self.layer2)
-        feat_m.append(self.layer3)
-        feat_m.append(self.layer4)
-        return feat_m
-
-    def get_bn_before_relu(self):
-        if isinstance(self.layer1[0], Bottleneck):
-            bn1 = self.layer1[-1].bn3
-            bn2 = self.layer2[-1].bn3
-            bn3 = self.layer3[-1].bn3
-            bn4 = self.layer4[-1].bn3
-        elif isinstance(self.layer1[0], BasicBlock):
-            bn1 = self.layer1[-1].bn2
-            bn2 = self.layer2[-1].bn2
-            bn3 = self.layer3[-1].bn2
-            bn4 = self.layer4[-1].bn2
+        # AFPN 模块集成
+        if self.use_afpn:
+            print(f"[INFO] ResNet_SDD: AFPN Enabled. Inputs: {[64*block.expansion, 128*block.expansion, 256*block.expansion, 512*block.expansion]}")
+            # ResNet 通常有 4 个 stage，通道数随 expansion 变化
+            c1 = 64 * block.expansion
+            c2 = 128 * block.expansion
+            c3 = 256 * block.expansion
+            c4 = 512 * block.expansion
+            self.afpn = AFPN(in_channels=[c1, c2, c3, c4], out_channels=feat_dim)
         else:
-            raise NotImplementedError("ResNet unknown block error !!!")
-
-        return [bn1, bn2, bn3, bn4]
-
-    def get_stage_channels(self):
-        return self.stage_channels
+            print("[INFO] ResNet_SDD: Standard Mode (No AFPN).")
+            self.afpn = None
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
-        for i in range(num_blocks):
-            stride = strides[i]
-            layers.append(block(self.in_planes, planes, stride, i == num_blocks - 1))
+        for i in range(len(strides)):
+            # 这里 is_last=False 意味着 BasicBlock 只返回 out，不返回 preact
+            layers.append(block(self.in_planes, planes, strides[i], is_last=False))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def encode(self, x, idx, preact=False):
-        if idx == -1:
-            out, pre = self.layer4(F.relu(x))
-        elif idx == -2:
-            out, pre = self.layer3(F.relu(x))
-        elif idx == -3:
-            out, pre = self.layer2(F.relu(x))
-        else:
-            raise NotImplementedError()
-        return pre
-
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
-        f0 = out
-        out, f1_pre = self.layer1(out)
-        f1 = out
-        out, f2_pre = self.layer2(out)
-        f2 = out
-        out, f3_pre = self.layer3(out)
-        f3 = out
-        out, f4_pre = self.layer4(out)
-        f4 = out
+        
+        # 提取 4 个尺度的特征
+        f1 = self.layer1(out)
+        f2 = self.layer2(f1)
+        f3 = self.layer3(f2)
+        f4 = self.layer4(f3)
 
+        # 1. 根据开关决定是否走 AFPN
+        if self.use_afpn:
+            feature_final = self.afpn([f1, f2, f3, f4])
+        else:
+            feature_final = f4
 
-        x_spp,x_strength = self.spp(out)
+        # 2. SDD 处理 (对齐接口)
+        spp_out = self.spp(feature_final)
+        if len(spp_out) == 3:
+            x_spp, x_strength, masks = spp_out
+        else:
+            x_spp, x_strength = spp_out
+            masks = None
 
-        # feature_num = x_spp.shape[-1]
-        # patch_score = torch.zeros(x_spp.shape[0], self.class_num, feature_num)
-        # patch_strength = torch.zeros(x_spp.shape[0], feature_num)
-
+        # 3. 计算 Patch Logits
+        # [K, B, C] -> [B, C, K]
         x_spp = x_spp.permute((2, 0, 1))
-        m, b, c = x_spp.shape[0], x_spp.shape[1], x_spp.shape[2]
-        x_spp = torch.reshape(x_spp, (m * b, c))
-        patch_score = self.linear(x_spp)
-        patch_score = torch.reshape(patch_score, (m, b, self.class_num))
-        patch_score = patch_score.permute((1, 2, 0))
+        K, B, C = x_spp.shape
+        x_spp = x_spp.reshape(K * B, C)
+        
+        patch_score = self.linear(x_spp)  # 使用 self.linear
+        patch_score = patch_score.reshape(K, B, -1).permute(1, 2, 0)
 
+        # 4. 全局分类
+        x_global = self.avgpool(feature_final)
+        x_global = x_global.reshape(x_global.size(0), -1)
+        out = self.linear(x_global)       # 使用 self.linear
 
-
-        out = self.avgpool(out)
-        avg = out.reshape(out.size(0), -1)
-        out = self.linear(avg)
-
-        feats = {}
-        feats["feats"] = [f0, f1, f2, f3, f4]
-        feats["preact_feats"] = [f0, f1_pre, f2_pre, f3_pre, f4_pre]
-        feats["pooled_feat"] = avg
-
-        return out, patch_score
+        # 5. 统一返回 4 个值
+        return out, patch_score, masks, feature_final
 
 class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10, zero_init_residual=False):

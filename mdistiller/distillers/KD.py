@@ -108,9 +108,19 @@ class KD(Distiller):
         self.kd_loss_weight = cfg.KD.LOSS.KD_WEIGHT
 
     def forward_train(self, image, target, **kwargs):
-        logits_student, _ = self.student(image)
+        # 兼容性修复：适配 AFPN 模型的 4 返回值接口，只取第一个 (Logits)
+        out_s = self.student(image)
+        if isinstance(out_s, tuple):
+            logits_student = out_s[0]
+        else:
+            logits_student = out_s
+
         with torch.no_grad():
-            logits_teacher, _ = self.teacher(image)
+            out_t = self.teacher(image)
+            if isinstance(out_t, tuple):
+                logits_teacher = out_t[0]
+            else:
+                logits_teacher = out_t
 
         # losses
         loss_ce = self.ce_loss_weight * F.cross_entropy(logits_student, target)
@@ -131,11 +141,14 @@ class SDD_KD(Distiller):
         self.ce_loss_weight = cfg.KD.LOSS.CE_WEIGHT
         self.kd_loss_weight = cfg.KD.LOSS.KD_WEIGHT
         self.warmup = cfg.warmup
-        self.M=cfg.M
+        self.M = cfg.M
 
     def forward_train(self, image, target, **kwargs):
-        # [修改] 接收 4 个返回值: (logits, patch_logits, mask, features)
+        # [修改] 接口适配与逻辑统一：
+        # 1. 接收 4 个返回值: (logits, patch_logits, mask, features)
+        # 2. 这里的 `_` 显式忽略了 mask 和 features，确保没有 Dynamic Distillation 逻辑
         logits_student, patch_s, _, _ = self.student(image)
+        
         with torch.no_grad():
             logits_teacher, patch_t, _, _ = self.teacher(image)
 
@@ -143,15 +156,17 @@ class SDD_KD(Distiller):
         loss_ce = self.ce_loss_weight * F.cross_entropy(logits_student, target)
 
         if self.M == '[1]':
-            loss_kd =self.kd_loss_weight * kd_loss(
+            loss_kd = self.kd_loss_weight * kd_loss(
                 logits_student,
                 logits_teacher,
                 self.temperature,
             )
         else:
+            # 3. 直接使用标准的 sdd_kd_loss (静态特征对齐)
             loss_kd = self.kd_loss_weight * sdd_kd_loss(
                 patch_s, patch_t, self.temperature, target
             )
+            
         losses_dict = {
             "loss_ce": loss_ce,
             "loss_kd": loss_kd,

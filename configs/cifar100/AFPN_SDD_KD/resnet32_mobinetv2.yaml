@@ -1,11 +1,11 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_nkd_afpn,res32x4_sdd,shuv2_sdd"
-  PROJECT: "SDD"
+  TAG: "dkd,resnet32x4,mv2"
+  PROJECT: "cifar100_baselines"
 DISTILLER:
-  TYPE: "SDD_NKD"
-  TEACHER: "resnet32x4_sdd"
-  STUDENT: "ShuffleV2_afpn_sdd"
+  TYPE: "GL_DKD"
+  TEACHER: "resnet32x4"
+  STUDENT: "MobileNetV2"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240
@@ -15,4 +15,5 @@ SOLVER:
   WEIGHT_DECAY: 0.0005
   MOMENTUM: 0.9
   TYPE: "SGD"
-
+DKD:
+  BETA: 6.0

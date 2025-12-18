@@ -1,15 +1,15 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_nkd_afpn,res32x4_sdd,shuv2_sdd"
+  TAG: "SDD_KD_AFPN,res32x4_sdd,res8x4_sdd"
   PROJECT: "SDD"
 DISTILLER:
-  TYPE: "SDD_NKD"
+  TYPE: "SDD_KD"
   TEACHER: "resnet32x4_sdd"
-  STUDENT: "ShuffleV2_afpn_sdd"
+  STUDENT: "resnet8x4_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240
-  LR: 0.01
+  LR: 0.05
   LR_DECAY_STAGES: [150, 180, 210]
   LR_DECAY_RATE: 0.1
   WEIGHT_DECAY: 0.0005

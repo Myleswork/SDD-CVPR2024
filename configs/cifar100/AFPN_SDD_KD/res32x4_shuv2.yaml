@@ -1,9 +1,9 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_nkd_afpn,res32x4_sdd,shuv2_sdd"
+  TAG: "sdd_kd_afpn,res32x4_sdd,shuv2_sdd"
   PROJECT: "SDD"
 DISTILLER:
-  TYPE: "SDD_NKD"
+  TYPE: "SDD_KD"
   TEACHER: "resnet32x4_sdd"
   STUDENT: "ShuffleV2_afpn_sdd"
 SOLVER:

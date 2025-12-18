@@ -1,11 +1,11 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "SDD_NKD,res32x4_sdd,mv2_sdd"
-  PROJECT: "cifar100_baselines"
+  TAG: "SDD_NKD_afpn,res32x4_sdd,mv2_sdd"
+  PROJECT: "SDD"
 DISTILLER:
   TYPE: "SDD_NKD"
   TEACHER: "resnet32x4_sdd"
-  STUDENT: "MobileNetV2_sdd"
+  STUDENT: "MobileNetV2_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240

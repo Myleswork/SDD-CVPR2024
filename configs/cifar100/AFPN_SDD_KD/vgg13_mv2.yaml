@@ -1,11 +1,11 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_nkd_afpn,res32x4_sdd,shuv2_sdd"
+  TAG: "sdd_kd_afpn,vgg13_sdd,mv2_sdd"
   PROJECT: "SDD"
 DISTILLER:
-  TYPE: "SDD_NKD"
-  TEACHER: "resnet32x4_sdd"
-  STUDENT: "ShuffleV2_afpn_sdd"
+  TYPE: "SDD_KD"
+  TEACHER: "vgg13_sdd"
+  STUDENT: "MobileNetV2_afpn_sdd"
 SOLVER:
   BATCH_SIZE: 64
   EPOCHS: 240
@@ -15,4 +15,5 @@ SOLVER:
   WEIGHT_DECAY: 0.0005
   MOMENTUM: 0.9
   TYPE: "SGD"
-
+DKD:
+  BETA: 6.0
