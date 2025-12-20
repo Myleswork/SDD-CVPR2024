@@ -3,10 +3,55 @@ import numpy as np
 import torch
 from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
+import lmdb
+import pickle
+import six
+from PIL import Image
+import io
 
 # data_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../data/imagenet')
 
-data_folder = "./data/imagenet2012/imagenet2012"
+data_folder = "./data/imagenet/"
+
+class ImageNetLMDB(torch.utils.data.Dataset):
+    def __init__(self, db_path, transform=None):
+        self.db_path = db_path
+        self.env = None
+        self.txn = None
+        self.transform = transform
+        
+        # 预读取长度，不打开文件句柄
+        temp_env = lmdb.open(db_path, subdir=False, readonly=True, lock=False, readahead=False, meminit=False)
+        with temp_env.begin(write=False) as txn:
+            self.length = int(txn.get(b'__len__'))
+        temp_env.close()
+
+    def _init_db(self):
+        self.env = lmdb.open(self.db_path, subdir=False, readonly=True, lock=False, readahead=False, meminit=False)
+        self.txn = self.env.begin(write=False)
+
+    def __getitem__(self, index):
+        # 延迟初始化：在 worker 进程里打开句柄
+        if self.env is None:
+            self._init_db()
+            
+        key = u'{}'.format(index).encode('ascii')
+        value_byte = self.txn.get(key)
+        
+        # 解包 (bytes, label)
+        img_bytes, target = pickle.loads(value_byte)
+        
+        # 字节流转图像
+        buffer = io.BytesIO(img_bytes)
+        img = Image.open(buffer).convert('RGB')
+        
+        if self.transform is not None:
+            img = self.transform(img)
+            
+        return img, target, index
+
+    def __len__(self):
+        return self.length
 
 
 class ImageNet(ImageFolder):
@@ -97,6 +142,18 @@ def get_imagenet_test_transform(mean, std):
 def get_imagenet_dataloaders(batch_size, val_batch_size, num_workers,
                              mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     train_transform = get_imagenet_train_transform(mean, std)
+    # === 修改开始 ===
+    lmdb_train_path = os.path.join(data_folder, 'train.lmdb')
+
+    if os.path.exists(lmdb_train_path):
+        print(f"[INFO] Found LMDB dataset at {lmdb_train_path}. Using LMDB loader (Optimized for HDD).")
+        train_set = ImageNetLMDB(lmdb_train_path, transform=train_transform)
+    else:
+        print("[INFO] LMDB not found. Using standard ImageFolder (Slow on HDD).")
+        train_folder = os.path.join(data_folder, 'train')
+        train_set = ImageNet(train_folder, transform=train_transform)
+    # === 修改结束 ===
+
     train_folder = os.path.join(data_folder, 'train')
     train_set = ImageNet(train_folder, transform=train_transform)
     num_data = len(train_set)

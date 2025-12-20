@@ -1,6 +1,6 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_dkd_AFPN,res34,res18,imagenet"
+  TAG: "gld_nkd_afpn,res34,res18,imagenet,M=[1,2,4]"
   PROJECT: "SDD"
 DATASET:
   TYPE: "imagenet"
@@ -8,7 +8,7 @@ DATASET:
   TEST:
     BATCH_SIZE: 128
 DISTILLER:
-  TYPE: "SDD_DKD"
+  TYPE: "SDD_NKD"
   TEACHER: "ResNet34_sdd"
   STUDENT: "ResNet18_afpn_sdd"
 SOLVER:
