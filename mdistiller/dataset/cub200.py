@@ -164,20 +164,20 @@ def get_cub200_dataloaders(batch_size=128, num_workers=8, is_instance=False):
     ])
 
     if is_instance:
-        train_set = CUB2011Classification_Instance(root='./data',
+        train_set = CUB2011Classification_Instance(root='./data/cub200',
                                           download=True,
                                           train=True,
                                           transform=train_transform)
         n_data = len(train_set)
     else:
-        train_set = CUB2011Classification(root='./data', train=True, download=True, transform=train_transform)
+        train_set = CUB2011Classification(root='./data/cub200', train=True, download=True, transform=train_transform)
     train_loader = DataLoader(train_set,
                               batch_size=batch_size,
                               shuffle=True,
                               num_workers=num_workers,
                               drop_last=True)
 
-    test_set = CUB2011Classification(root='./data', train=False, download=True, transform=test_transform)
+    test_set = CUB2011Classification(root='./data/cub200', train=False, download=True, transform=test_transform)
     test_loader = DataLoader(test_set,
                              batch_size=int(batch_size / 2),
                              shuffle=False,

@@ -17,33 +17,33 @@
 # python train_origin.py --cfg configs/cifar100/AFPN_SDD_NKD/wrn40_2_vgg8.yaml --M [1,2,4]
 
 #上面改过了
-# res32x4_mv2
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_mv2.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_mv2.yaml --M [1,2]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_mv2.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_mv2.yaml --M [1,2]
+# # res32x4_mv2
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_mv2.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_mv2.yaml --M [1,2]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_mv2.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_mv2.yaml --M [1,2]
 
 
 
-# res32x4_shuv1
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_shuv1.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_shuv1.yaml --M [1,2]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_shuv1.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_shuv1.yaml --M [1,2]
+# # res32x4_shuv1
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_shuv1.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res32x4_shuv1.yaml --M [1,2]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_shuv1.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/res32x4_shuv1.yaml --M [1,2]
 
 
 
-# vgg13_mv2
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_mv2.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_mv2.yaml --M [1,2]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_mv2.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_mv2.yaml --M [1,2]
+# # vgg13_mv2
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_mv2.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_mv2.yaml --M [1,2]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_mv2.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_mv2.yaml --M [1,2]
 
-# vgg13_vgg8
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_vgg8.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_vgg8.yaml --M [1,2]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_vgg8.yaml --M [1,2,4]
-python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_vgg8.yaml --M [1,2]
+# # vgg13_vgg8
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_vgg8.yaml --M [1,2,4]
+# python train_origin.py --cfg configs/cub200/sdd_kd_afpn/vgg13_vgg8.yaml --M [1,2]
+# python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_vgg8.yaml --M [1,2,4]
+python train_origin.py --cfg configs/cub200/sdd_nkd_afpn/vgg13_vgg8.yaml --M [1,2] --resume
 
 #res50_shuv1
 python train_origin.py --cfg configs/cub200/sdd_kd_afpn/res50_shuv1.yaml --M [1,2,4]

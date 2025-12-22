@@ -1,6 +1,6 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "sdd_nkd_afpn,vgg13,vgg8"
+  TAG: "sdd_nkd_afpn,vgg13,vgg8,cub200"
   PROJECT: "SDD"
 
 DATASET:
